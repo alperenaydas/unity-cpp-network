@@ -1,33 +1,47 @@
 #include <iostream>
-#include <winsock2.h>
+#include <enet/enet.h>
 #include "Protocol.h"
-
-#pragma comment(lib, "ws2_32.lib")
 
 int main (int argc, char ** argv)
 {
-    WSADATA wsa;
-    WSAStartup(MAKEWORD(2,2), &wsa);
-    SOCKET s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (enet_initialize () != 0) {
+        std::cerr << "ENet failed!" << std::endl;
+        return EXIT_FAILURE;
+    }
+    atexit(enet_deinitialize);
 
-    sockaddr_in server;
-    server.sin_family = AF_INET;
-    server.sin_addr.s_addr = INADDR_ANY;
-    server.sin_port = htons(Purpose::SERVER_PORT);
+    ENetAddress address;
+    address.host = ENET_HOST_ANY;
+    address.port = Purpose::SERVER_PORT;
 
-    bind(s, (struct sockaddr *)&server, sizeof(server));
+    ENetHost* server = enet_host_create(&address, 32, 2, 0, 0);
 
-    std::cout << "Server is listening on Port 8888..." << std::endl;
+    if (server == nullptr) {
+        std::cerr << "Could not start server!" << std::endl;
+        return 1;
+    }
 
-    char buffer[512];
-    sockaddr_in client;
-    int client_len = sizeof(client);
+    std::cout << "Purpose ENet Server started on port " << Purpose::SERVER_PORT << std::endl;
 
-    recvfrom(s, buffer, 512, 0, (struct sockaddr *)&client, &client_len);
-
-    std::cout << "Received Message: " << buffer << std::endl;
-
-    closesocket(s);
-    WSACleanup();
+    ENetEvent event;
+    while (true) {
+        while (enet_host_service(server, &event, 10) > 0) {
+            switch (event.type) {
+                case ENET_EVENT_TYPE_CONNECT:
+                    std::cout << "Client connected from " << event.peer->address.host << std::endl;
+                    break;
+                case ENET_EVENT_TYPE_RECEIVE:
+                    std::cout << "Packet received!" << std::endl;
+                    enet_packet_destroy(event.packet);
+                    break;
+                case ENET_EVENT_TYPE_DISCONNECT:
+                    std::cout << "Client disconnected." << std::endl;
+                    break;
+                case ENET_EVENT_TYPE_NONE:
+                    std::cout << "Unknown event type." << std::endl;
+                    break;
+            }
+        }
+    }
     return 0;
 }

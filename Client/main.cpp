@@ -1,26 +1,57 @@
 ﻿#include <iostream>
-#include <winsock2.h>
+#include <enet/enet.h>
 #include "Protocol.h"
 
-#pragma comment(lib, "ws2_32.lib")
 
 int main() {
-    WSADATA wsa;
-    WSAStartup(MAKEWORD(2,2), &wsa);
+    if (enet_initialize() != 0) {
+        std::cerr << "ENet failed!" << std::endl;
+        return EXIT_FAILURE;
+    }
+    atexit(enet_deinitialize);
 
-    SOCKET s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    ENetHost* client = enet_host_create(NULL, 1, Purpose::CHANNEL_COUNT, 0, 0);
 
-    sockaddr_in serverAddr;
-    serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(Purpose::SERVER_PORT);
-    serverAddr.sin_addr.s_addr = inet_addr(Purpose::SERVER_IP);
+    if (client == nullptr) {
+        std::cerr << "Could not create ENet client host." << std::endl;
+        return 1;
+    }
 
-    Purpose::HandshakePacket packet;
-    sendto(s, (const char*)&packet, sizeof(packet), 0, (struct sockaddr *)&serverAddr, sizeof(serverAddr));
+    ENetAddress address;
+    enet_address_set_host(&address, Purpose::SERVER_IP);
+    address.port = Purpose::SERVER_PORT;
 
-    std::cout << "Message sent to Server!" << std::endl;
+    ENetPeer* peer = enet_host_connect(client, &address, Purpose::CHANNEL_COUNT, 0);
 
-    closesocket(s);
-    WSACleanup();
+    if (peer == nullptr) {
+        std::cerr << "No available peers for initiating an ENet connection." << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    std::cout << "Connecting to Purpose Server at " << Purpose::SERVER_IP << "..." << std::endl;
+
+    ENetEvent event;
+    bool connected = false;
+
+    if (enet_host_service(client, &event, 5000) > 0 && event.type == ENET_EVENT_TYPE_CONNECT) {
+
+        std::cout << "Connection to server succeeded!" << std::endl;
+        connected = true;
+
+        Purpose::HandshakePacket packet;
+        ENetPacket* enetPacket = enet_packet_create(&packet, sizeof(packet), ENET_PACKET_FLAG_RELIABLE);
+
+        enet_peer_send(peer, Purpose::CHANNEL_RELIABLE, enetPacket);
+
+        enet_host_flush(client);
+    } else {
+        std::cerr << "Connection to server failed." << std::endl;
+    }
+
+    if (connected) {
+        enet_host_service(client, &event, 1000);
+    }
+
+    enet_host_destroy(client);
     return 0;
 }
