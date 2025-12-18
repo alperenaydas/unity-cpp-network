@@ -1,5 +1,6 @@
 ﻿#include <iostream>
 #include <winsock2.h>
+#include "Protocol.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -11,11 +12,11 @@ int main() {
 
     sockaddr_in serverAddr;
     serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(8888);
-    serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    serverAddr.sin_port = htons(Purpose::SERVER_PORT);
+    serverAddr.sin_addr.s_addr = inet_addr(Purpose::SERVER_IP);
 
-    const char* message = "Hello from the client!";
-    sendto(s, message, strlen(message), 0, (struct sockaddr *)&serverAddr, sizeof(serverAddr));
+    Purpose::HandshakePacket packet;
+    sendto(s, (const char*)&packet, sizeof(packet), 0, (struct sockaddr *)&serverAddr, sizeof(serverAddr));
 
     std::cout << "Message sent to Server!" << std::endl;
 

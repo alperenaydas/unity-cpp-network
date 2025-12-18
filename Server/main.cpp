@@ -1,5 +1,6 @@
 #include <iostream>
 #include <winsock2.h>
+#include "Protocol.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -12,7 +13,7 @@ int main (int argc, char ** argv)
     sockaddr_in server;
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = INADDR_ANY;
-    server.sin_port = htons(8888);
+    server.sin_port = htons(Purpose::SERVER_PORT);
 
     bind(s, (struct sockaddr *)&server, sizeof(server));
 
