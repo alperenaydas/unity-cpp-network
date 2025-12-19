@@ -7,8 +7,23 @@
 static ENetHost* client = nullptr;
 static ENetPeer* peer = nullptr;
 
+typedef void (*LogCallback)(const char* message);
+
+static LogCallback unityLogger = nullptr;
+
+void PurposeLog(const char* message) {
+    if (unityLogger != nullptr) {
+        unityLogger(message);
+    }
+}
+
 extern "C" {
+    EXPORT_API void RegisterLogCallback(LogCallback callback) {
+        unityLogger = callback;
+    }
+
     EXPORT_API bool ConnectToServer() {
+        PurposeLog("[Plugin] ConnectToServer called from Unity!");
         if (enet_initialize() != 0) return false;
 
         client = enet_host_create(NULL, 1, Purpose::CHANNEL_COUNT, 0, 0);
@@ -35,17 +50,17 @@ extern "C" {
         if (client == nullptr) return;
 
         ENetEvent event;
-        while (enet_host_service(client, &event, 0) > 0) {
+        while (enet_host_service(client, &event, 10) > 0) {
             switch (event.type) {
                 case ENET_EVENT_TYPE_CONNECT:
-                    std::cout << "[Plugin] Connected to Server!" << std::endl;
+                    PurposeLog("[Plugin] Connected to Server!");
                     break;
                 case ENET_EVENT_TYPE_RECEIVE:
-                    std::cout << "[Plugin] Packet Received!" << std::endl;
+                    PurposeLog("[Plugin] Packet Received!");
                     enet_packet_destroy(event.packet);
                     break;
                 case ENET_EVENT_TYPE_DISCONNECT:
-                    std::cout << "[Plugin] Disconnected!" << std::endl;
+                    PurposeLog("[Plugin] Disconnected!");
                     peer = nullptr;
                     break;
             }
