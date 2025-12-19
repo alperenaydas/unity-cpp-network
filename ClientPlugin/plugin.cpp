@@ -19,7 +19,16 @@ extern "C" {
         address.port = Purpose::SERVER_PORT;
 
         peer = enet_host_connect(client, &address, Purpose::CHANNEL_COUNT, 0);
-        return peer != nullptr;
+
+        if (peer == nullptr) return false;
+
+        ENetEvent event;
+        if (enet_host_service(client, &event, 2000) > 0 && event.type == ENET_EVENT_TYPE_CONNECT) {
+            return true;
+        } else {
+            enet_peer_reset(peer);
+            return false;
+        }
     }
 
     EXPORT_API void ServiceNetwork() {
