@@ -1,18 +1,26 @@
+#pragma once
 #include <cstdint>
 
+#pragma pack(push, 1)
 namespace Purpose {
+    constexpr uint16_t SERVER_PORT = 8888;
+    inline const char* SERVER_IP = "127.0.0.1";
 
-    constexpr std::uint16_t SERVER_PORT = 8888;
-    const char* SERVER_IP = "127.0.0.1";
-
-    enum Channels {
+    enum Channels : uint8_t {
         CHANNEL_RELIABLE = 0,
         CHANNEL_UNRELIABLE = 1,
         CHANNEL_COUNT
     };
 
-    struct HandshakePacket {
-        uint32_t magicNumber = htonl(0x50555250);;
-        uint32_t protocolVersion = 1;
+    enum PacketType : uint16_t {
+        PACKET_WELCOME = 1,
+        PACKET_ENTITY_UPDATE = 2
+    };
+
+    struct WelcomePacket {
+        uint16_t type = PACKET_WELCOME;
+        uint32_t playerID;
+        float spawnX, spawnY, spawnZ;
     };
 }
+#pragma pack(pop)
