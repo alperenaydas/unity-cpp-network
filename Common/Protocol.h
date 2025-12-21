@@ -22,5 +22,12 @@ namespace Purpose {
         uint32_t playerID;
         float spawnX, spawnY, spawnZ;
     };
+
+    struct EntityState {
+        uint16_t type = PACKET_ENTITY_UPDATE;
+        uint32_t networkID;
+        float posX, posY, posZ;
+        float rotX, rotY, rotZ;
+    };
 }
 #pragma pack(pop)

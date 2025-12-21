@@ -1,88 +1,90 @@
 #include <enet/enet.h>
 #include "Protocol.h"
-#include <cstdio>
+#include "RingBuffer.h"
 
 #define EXPORT_API __declspec(dllexport)
 
-static ENetHost* client = nullptr;
-static ENetPeer* peer = nullptr;
-static uint32_t assignedPlayerID = 0;
+static ENetHost* g_client = nullptr;
+static ENetPeer* g_peer = nullptr;
+static uint32_t g_assignedPlayerID = 0;
+static EntityBuffer g_entityBuffer;
 
 typedef void (*LogCallback)(const char* message);
-static LogCallback unityLogger = nullptr;
+static LogCallback g_unityLogger = nullptr;
 
 void PurposeLog(const char* message) {
-    if (unityLogger) unityLogger(message);
+    if (g_unityLogger) g_unityLogger(message);
 }
 
 extern "C" {
     EXPORT_API void RegisterLogCallback(LogCallback callback) {
-        unityLogger = callback;
+        g_unityLogger = callback;
     }
 
     EXPORT_API uint32_t GetAssignedPlayerID() {
-        return assignedPlayerID;
+        return g_assignedPlayerID;
+    }
+
+    EXPORT_API bool GetNextEntityUpdate(Purpose::EntityState* outState) {
+        return g_entityBuffer.Pop(*outState);
     }
 
     EXPORT_API bool ConnectToServer() {
-        PurposeLog("[Plugin] Connecting to server...");
-
         if (enet_initialize() != 0) return false;
 
-        client = enet_host_create(nullptr, 1, Purpose::CHANNEL_COUNT, 0, 0);
-        if (!client) return false;
+        g_client = enet_host_create(nullptr, 1, Purpose::CHANNEL_COUNT, 0, 0);
+        if (!g_client) return false;
 
         ENetAddress address;
         enet_address_set_host(&address, Purpose::SERVER_IP);
         address.port = Purpose::SERVER_PORT;
 
-        peer = enet_host_connect(client, &address, Purpose::CHANNEL_COUNT, 0);
-        if (!peer) return false;
+        g_peer = enet_host_connect(g_client, &address, Purpose::CHANNEL_COUNT, 0);
+        if (!g_peer) return false;
 
         ENetEvent event;
-        if (enet_host_service(client, &event, 2000) > 0 && event.type == ENET_EVENT_TYPE_CONNECT) {
+        if (enet_host_service(g_client, &event, 2000) > 0 && event.type == ENET_EVENT_TYPE_CONNECT) {
+            PurposeLog("[Plugin] Connection Established.");
             return true;
         }
 
-        enet_peer_reset(peer);
+        enet_peer_reset(g_peer);
         return false;
     }
 
     EXPORT_API void ServiceNetwork() {
-        if (!client) return;
+        if (!g_client) return;
 
         ENetEvent event;
-        while (enet_host_service(client, &event, 0) > 0) {
-            switch (event.type) {
-                case ENET_EVENT_TYPE_RECEIVE: {
-                    auto* msg = reinterpret_cast<Purpose::WelcomePacket*>(event.packet->data);
-                    if (msg->type == Purpose::PACKET_WELCOME) {
-                        assignedPlayerID = msg->playerID;
+        while (enet_host_service(g_client, &event, 0) > 0) {
+            if (event.type == ENET_EVENT_TYPE_RECEIVE) {
+                uint16_t packetType = *reinterpret_cast<uint16_t*>(event.packet->data);
 
-                        char buf[64];
-                        sprintf(buf, "[Plugin] Welcome received! ID: %u", assignedPlayerID);
-                        PurposeLog(buf);
-                    }
-                    enet_packet_destroy(event.packet);
-                    break;
+                if (packetType == Purpose::PACKET_WELCOME) {
+                    auto* msg = reinterpret_cast<Purpose::WelcomePacket*>(event.packet->data);
+                    g_assignedPlayerID = msg->playerID;
                 }
-                case ENET_EVENT_TYPE_DISCONNECT:
-                    PurposeLog("[Plugin] Disconnected from server.");
-                    peer = nullptr;
-                    break;
-                default: break;
+                else if (packetType == Purpose::PACKET_ENTITY_UPDATE) {
+                    auto* msg = reinterpret_cast<Purpose::EntityState*>(event.packet->data);
+                    g_entityBuffer.Push(*msg);
+                }
+                enet_packet_destroy(event.packet);
+            }
+            else if (event.type == ENET_EVENT_TYPE_DISCONNECT) {
+                PurposeLog("[Plugin] Disconnected.");
+                g_peer = nullptr;
             }
         }
     }
 
     EXPORT_API void DisconnectFromServer() {
-        if (peer) {
-            enet_peer_disconnect(peer, 0);
-            enet_host_flush(client);
+        if (g_peer) {
+            enet_peer_disconnect(g_peer, 0);
+            enet_host_flush(g_client);
         }
-        if (client) {
-            enet_host_destroy(client);
-            client = nullptr;
+        if (g_client) {
+            enet_host_destroy(g_client);
+            g_client = nullptr;
         }
         enet_deinitialize();
     }
