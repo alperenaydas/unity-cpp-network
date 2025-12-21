@@ -1,4 +1,5 @@
 #include <enet/enet.h>
+#include "EntityManager.h"
 #include "Protocol.h"
 #include "RingBuffer.h"
 
@@ -7,7 +8,9 @@
 static ENetHost* g_client = nullptr;
 static ENetPeer* g_peer = nullptr;
 static uint32_t g_assignedPlayerID = 0;
+
 static EntityBuffer g_entityBuffer;
+static EntityManager g_entityManager;
 
 typedef void (*LogCallback)(const char* message);
 static LogCallback g_unityLogger = nullptr;
@@ -66,7 +69,9 @@ extern "C" {
                 }
                 else if (packetType == Purpose::PACKET_ENTITY_UPDATE) {
                     auto* msg = reinterpret_cast<Purpose::EntityState*>(event.packet->data);
+
                     g_entityBuffer.Push(*msg);
+                    g_entityManager.UpdateEntity(*msg);
                 }
                 enet_packet_destroy(event.packet);
             }
@@ -87,5 +92,9 @@ extern "C" {
             g_client = nullptr;
         }
         enet_deinitialize();
+    }
+
+    EXPORT_API int GetInternalEntityCount() {
+        return g_entityManager.GetCount();
     }
 }

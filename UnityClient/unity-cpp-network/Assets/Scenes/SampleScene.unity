@@ -427,6 +427,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 59eefef9cbaf0a949a6bdcda61d4826e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PurposeNetworkClient
+  EntityPrefab: {fileID: 5707701247160890583, guid: cedeebd9cbe0bb342910603bd50b5c1b, type: 3}
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0

@@ -1,76 +1,60 @@
 #include <iostream>
-#include <cstdlib>
-#include <ctime>
+#include <map>
 #include <enet/enet.h>
 #include "Protocol.h"
 
-void SendPacket(ENetPeer *peer, const void *data, size_t size, bool reliable = true) {
-    uint32_t flags = reliable ? ENET_PACKET_FLAG_RELIABLE : 0;
-    ENetPacket *packet = enet_packet_create(data, size, flags);
-    enet_peer_send(peer, Purpose::CHANNEL_RELIABLE, packet);
-}
+struct ServerPlayer {
+    uint32_t id;
+    float x, y, z;
+};
 
-int main(int argc, char **argv) {
-    std::srand(static_cast<unsigned int>(std::time(nullptr)));
+std::map<ENetPeer*, ServerPlayer> g_activePlayers;
+uint32_t g_nextID = 1001;
 
-    if (enet_initialize() != 0) {
-        std::cerr << "[-] ENet failed to initialize!" << std::endl;
-        return EXIT_FAILURE;
-    }
-    std::atexit(enet_deinitialize);
+int main() {
+    if (enet_initialize() != 0) return EXIT_FAILURE;
 
     ENetAddress address;
     address.host = ENET_HOST_ANY;
     address.port = Purpose::SERVER_PORT;
 
-    ENetHost *server = enet_host_create(&address, 32, Purpose::CHANNEL_COUNT, 0, 0);
-    if (!server) {
-        std::cerr << "[-] Could not start server on port " << Purpose::SERVER_PORT << std::endl;
-        return EXIT_FAILURE;
-    }
-
-    std::cout << "[+] Purpose Server started on port " << Purpose::SERVER_PORT << std::endl;
+    ENetHost* server = enet_host_create(&address, 32, Purpose::CHANNEL_COUNT, 0, 0);
+    std::cout << "[Server] Waiting for Purpose Engine clients..." << std::endl;
 
     ENetEvent event;
     while (true) {
         while (enet_host_service(server, &event, 10) > 0) {
             switch (event.type) {
                 case ENET_EVENT_TYPE_CONNECT: {
-                    std::cout << "[Connect] Client from " << event.peer->address.host << ":" << event.peer->address.port
-                            << std::endl;
+                    uint32_t newID = g_nextID++;
+                    g_activePlayers[event.peer] = { newID, 0.0f, 0.0f, 0.0f };
+
+                    std::cout << "[Connect] Assigned ID: " << newID << std::endl;
 
                     Purpose::WelcomePacket welcome;
-                    welcome.playerID = 777;
-                    welcome.spawnX = 0.0f;
-                    welcome.spawnY = 10.0f;
-                    welcome.spawnZ = 0.0f;
-                    SendPacket(event.peer, &welcome, sizeof(welcome));
-
-                    Purpose::EntityState entity;
-                    entity.type = Purpose::PACKET_ENTITY_UPDATE;
-                    entity.networkID = 777;
-                    entity.posX = static_cast<float>(std::rand() % 100);
-                    entity.posY = welcome.spawnY;
-                    entity.posZ = static_cast<float>(std::rand() % 100);
-                    SendPacket(event.peer, &entity, sizeof(entity));
-
+                    welcome.playerID = newID;
+                    ENetPacket* wPacket = enet_packet_create(&welcome, sizeof(welcome), ENET_PACKET_FLAG_RELIABLE);
+                    enet_peer_send(event.peer, Purpose::CHANNEL_RELIABLE, wPacket);
                     break;
                 }
 
-                case ENET_EVENT_TYPE_RECEIVE:
-                    enet_packet_destroy(event.packet);
-                    break;
-
                 case ENET_EVENT_TYPE_DISCONNECT:
-                    std::cout << "[Disconnect] Client left." << std::endl;
-                    event.peer->data = nullptr;
+                    std::cout << "[Disconnect] ID " << g_activePlayers[event.peer].id << " left." << std::endl;
+                    g_activePlayers.erase(event.peer);
                     break;
-
-                default: break;
             }
         }
-    }
 
-    enet_host_destroy(server);
-    return 0;
+        for (auto const& [peer, data] : g_activePlayers) {
+            Purpose::EntityState state;
+            state.type = Purpose::PACKET_ENTITY_UPDATE;
+            state.networkID = data.id;
+            state.posX = data.x; state.posY = data.y; state.posZ = data.z;
+
+            ENetPacket* packet = enet_packet_create(&state, sizeof(state), ENET_PACKET_FLAG_UNRELIABLE_FRAGMENT);
+            enet_host_broadcast(server, Purpose::CHANNEL_UNRELIABLE, packet);
+
+            g_activePlayers[peer].x += 0.01f;
+        }
+    }
 }

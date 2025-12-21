@@ -2,56 +2,45 @@
 #include <enet/enet.h>
 #include "Protocol.h"
 
-
 int main() {
-    if (enet_initialize() != 0) {
-        std::cerr << "ENet failed!" << std::endl;
-        return EXIT_FAILURE;
-    }
+    if (enet_initialize() != 0) return EXIT_FAILURE;
     atexit(enet_deinitialize);
 
     ENetHost* client = enet_host_create(NULL, 1, Purpose::CHANNEL_COUNT, 0, 0);
-
-    if (client == nullptr) {
-        std::cerr << "Could not create ENet client host." << std::endl;
-        return 1;
-    }
+    if (!client) return EXIT_FAILURE;
 
     ENetAddress address;
     enet_address_set_host(&address, Purpose::SERVER_IP);
     address.port = Purpose::SERVER_PORT;
 
     ENetPeer* peer = enet_host_connect(client, &address, Purpose::CHANNEL_COUNT, 0);
+    if (!peer) return EXIT_FAILURE;
 
-    if (peer == nullptr) {
-        std::cerr << "No available peers for initiating an ENet connection." << std::endl;
-        return EXIT_FAILURE;
-    }
-
-    std::cout << "Connecting to Purpose Server at " << Purpose::SERVER_IP << "..." << std::endl;
+    std::cout << "Connecting to Purpose Server..." << std::endl;
 
     ENetEvent event;
-    bool connected = false;
+    while (true) {
+        while (enet_host_service(client, &event, 10) > 0) {
+            switch (event.type) {
+                case ENET_EVENT_TYPE_CONNECT:
+                    std::cout << "[Client] Connected to Server!" << std::endl;
+                    break;
 
-    if (enet_host_service(client, &event, 5000) > 0 && event.type == ENET_EVENT_TYPE_CONNECT) {
+                case ENET_EVENT_TYPE_RECEIVE: {
+                    auto* state = reinterpret_cast<Purpose::EntityState*>(event.packet->data);
+                    if (state->type == Purpose::PACKET_ENTITY_UPDATE) {
+                        std::cout << "[Update] ID: " << state->networkID
+                                  << " Pos: (" << state->posX << ", " << state->posZ << ")" << std::endl;
+                    }
+                    enet_packet_destroy(event.packet);
+                    break;
+                }
 
-        std::cout << "Connection to server succeeded!" << std::endl;
-        connected = true;
-
-        Purpose::HandshakePacket packet;
-        ENetPacket* enetPacket = enet_packet_create(&packet, sizeof(packet), ENET_PACKET_FLAG_RELIABLE);
-
-        enet_peer_send(peer, Purpose::CHANNEL_RELIABLE, enetPacket);
-
-        enet_host_flush(client);
-    } else {
-        std::cerr << "Connection to server failed." << std::endl;
+                case ENET_EVENT_TYPE_DISCONNECT:
+                    std::cout << "[Client] Disconnected." << std::endl;
+                    return 0;
+            }
+        }
     }
-
-    if (connected) {
-        enet_host_service(client, &event, 1000);
-    }
-
-    enet_host_destroy(client);
     return 0;
 }
