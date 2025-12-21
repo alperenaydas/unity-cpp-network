@@ -33,6 +33,12 @@ extern "C" {
     }
 
     EXPORT_API bool ConnectToServer() {
+        g_assignedPlayerID = 0;
+        g_entityBuffer.Clear();
+        g_entityManager.Clear();
+
+        PurposeLog("[Plugin] Connecting to server (State Reset)...");
+
         if (enet_initialize() != 0) return false;
 
         g_client = enet_host_create(nullptr, 1, Purpose::CHANNEL_COUNT, 0, 0);

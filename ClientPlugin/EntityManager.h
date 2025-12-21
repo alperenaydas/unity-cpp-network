@@ -25,6 +25,11 @@ public:
         return static_cast<int>(m_entities.size());
     }
 
+    void Clear() {
+        std::lock_guard lock(m_mutex);
+        m_entities.clear();
+    }
+
 private:
     std::unordered_map<uint32_t, Purpose::EntityState> m_entities;
     std::mutex m_mutex;

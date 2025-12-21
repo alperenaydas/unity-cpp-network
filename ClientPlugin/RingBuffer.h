@@ -25,6 +25,12 @@ public:
         return true;
     }
 
+    void Clear() {
+        std::lock_guard lock(m_mutex);
+        m_head = 0;
+        m_tail = 0;
+    }
+
 private:
     Purpose::EntityState m_buffer[BUFFER_SIZE];
     int m_head = 0;
