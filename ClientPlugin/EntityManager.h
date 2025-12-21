@@ -30,6 +30,14 @@ public:
         m_entities.clear();
     }
 
+    void RemoveEntity(uint32_t id) {
+        std::lock_guard lock(m_mutex);
+        auto it = m_entities.find(id);
+        if (it != m_entities.end()) {
+            m_entities.erase(it);
+        }
+    }
+
 private:
     std::unordered_map<uint32_t, Purpose::EntityState> m_entities;
     std::mutex m_mutex;

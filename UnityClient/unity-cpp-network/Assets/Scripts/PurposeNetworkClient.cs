@@ -22,6 +22,7 @@ public class PurposeNetworkClient : MonoBehaviour {
     [DllImport(DLL_NAME)] private static extern void DisconnectFromServer();
     [DllImport(DLL_NAME)] private static extern uint GetAssignedPlayerID();
     [DllImport(DLL_NAME)] private static extern bool GetNextEntityUpdate(out EntityState outState);
+    [DllImport(DLL_NAME)] private static extern uint GetNextDespawnID();
     
     public GameObject EntityPrefab;
     private Dictionary<uint, GameObject> _remoteEntities = new ();
@@ -29,14 +30,18 @@ public class PurposeNetworkClient : MonoBehaviour {
     private LogDelegate _logHandler;
     private uint _myID = 0;
 
+    private bool _connectedToServer;
+
     void Start() {
         _logHandler = (msg) => Debug.Log($"<color=cyan>[Native]</color> {msg}");
         RegisterLogCallback(_logHandler);
-        
-        if (!ConnectToServer()) Debug.LogError("Purpose: Connection Failed.");
+        _connectedToServer = ConnectToServer();
+        if (!_connectedToServer) Debug.LogError("Purpose: Connection Failed.");
     }
 
-    void Update() {
+    void Update()
+    {
+        if (!_connectedToServer) return;
         ServiceNetwork();
 
         uint serverID = GetAssignedPlayerID();
@@ -54,6 +59,15 @@ public class PurposeNetworkClient : MonoBehaviour {
             else
             {
                 UpdateEntityPosition(update);
+            }
+        }
+        
+        uint idToDestroy;
+        while ((idToDestroy = GetNextDespawnID()) != 0) {
+            if (_remoteEntities.TryGetValue(idToDestroy, out GameObject go)) {
+                Destroy(go);
+                _remoteEntities.Remove(idToDestroy);
+                Debug.Log($"<color=red>Deleted Entity: {idToDestroy}</color>");
             }
         }
     }

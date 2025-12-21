@@ -1,3 +1,4 @@
+#include <vector>
 #include <enet/enet.h>
 #include "EntityManager.h"
 #include "Protocol.h"
@@ -11,6 +12,7 @@ static uint32_t g_assignedPlayerID = 0;
 
 static EntityBuffer g_entityBuffer;
 static EntityManager g_entityManager;
+static std::vector<uint32_t> g_despawnQueue;
 
 typedef void (*LogCallback)(const char* message);
 static LogCallback g_unityLogger = nullptr;
@@ -79,6 +81,11 @@ extern "C" {
                     g_entityBuffer.Push(*msg);
                     g_entityManager.UpdateEntity(*msg);
                 }
+                else if (packetType == Purpose::PACKET_ENTITY_DESPAWN) {
+                    auto* msg = reinterpret_cast<Purpose::EntityDespawn*>(event.packet->data);
+                    g_despawnQueue.push_back(msg->networkID);
+                    g_entityManager.RemoveEntity(msg->networkID);
+                }
                 enet_packet_destroy(event.packet);
             }
             else if (event.type == ENET_EVENT_TYPE_DISCONNECT) {
@@ -102,5 +109,12 @@ extern "C" {
 
     EXPORT_API int GetInternalEntityCount() {
         return g_entityManager.GetCount();
+    }
+
+    EXPORT_API uint32_t GetNextDespawnID() {
+        if (g_despawnQueue.empty()) return 0;
+        uint32_t id = g_despawnQueue.back();
+        g_despawnQueue.pop_back();
+        return id;
     }
 }

@@ -14,7 +14,8 @@ namespace Purpose {
 
     enum PacketType : uint16_t {
         PACKET_WELCOME = 1,
-        PACKET_ENTITY_UPDATE = 2
+        PACKET_ENTITY_UPDATE = 2,
+        PACKET_ENTITY_DESPAWN = 3,
     };
 
     struct WelcomePacket {
@@ -29,5 +30,11 @@ namespace Purpose {
         float posX, posY, posZ;
         float rotX, rotY, rotZ;
     };
+
+    struct EntityDespawn {
+        uint16_t type = PACKET_ENTITY_DESPAWN;
+        uint32_t networkID;
+    };
+
 }
 #pragma pack(pop)

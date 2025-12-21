@@ -39,7 +39,14 @@ int main() {
                 }
 
                 case ENET_EVENT_TYPE_DISCONNECT:
-                    std::cout << "[Disconnect] ID " << g_activePlayers[event.peer].id << " left." << std::endl;
+                    uint32_t leftID = g_activePlayers[event.peer].id;
+                    std::cout << "[Disconnect] ID " << leftID << " left." << std::endl;
+                    Purpose::EntityDespawn despawn;
+                    despawn.networkID = leftID;
+
+                    ENetPacket* dPacket = enet_packet_create(&despawn, sizeof(despawn), ENET_PACKET_FLAG_RELIABLE);
+                    enet_host_broadcast(server, Purpose::CHANNEL_RELIABLE, dPacket);
+
                     g_activePlayers.erase(event.peer);
                     break;
             }
