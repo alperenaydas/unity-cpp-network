@@ -16,6 +16,7 @@ namespace Purpose {
         PACKET_WELCOME = 1,
         PACKET_ENTITY_UPDATE = 2,
         PACKET_ENTITY_DESPAWN = 3,
+        PACKET_CLIENT_INPUT = 4,
     };
 
     struct WelcomePacket {
@@ -34,6 +35,11 @@ namespace Purpose {
     struct EntityDespawn {
         uint16_t type = PACKET_ENTITY_DESPAWN;
         uint32_t networkID;
+    };
+
+    struct ClientInput {
+        uint16_t type = PACKET_CLIENT_INPUT;
+        bool w, a, s, d;
     };
 
 }

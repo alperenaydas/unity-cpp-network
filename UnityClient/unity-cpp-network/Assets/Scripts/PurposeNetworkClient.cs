@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Runtime.InteropServices;
@@ -23,6 +24,7 @@ public class PurposeNetworkClient : MonoBehaviour {
     [DllImport(DLL_NAME)] private static extern uint GetAssignedPlayerID();
     [DllImport(DLL_NAME)] private static extern bool GetNextEntityUpdate(out EntityState outState);
     [DllImport(DLL_NAME)] private static extern uint GetNextDespawnID();
+    [DllImport(DLL_NAME)] private static extern void SendMovementInput(bool w, bool a, bool s, bool d);
     
     public GameObject EntityPrefab;
     private Dictionary<uint, GameObject> _remoteEntities = new ();
@@ -31,6 +33,8 @@ public class PurposeNetworkClient : MonoBehaviour {
     private uint _myID = 0;
 
     private bool _connectedToServer;
+    
+    private bool _lastW, _lastA, _lastS, _lastD;
 
     void Start() {
         _logHandler = (msg) => Debug.Log($"<color=cyan>[Native]</color> {msg}");
@@ -70,8 +74,20 @@ public class PurposeNetworkClient : MonoBehaviour {
                 Debug.Log($"<color=red>Deleted Entity: {idToDestroy}</color>");
             }
         }
-    }
+
+        var w = Input.GetKey(KeyCode.W);
+        var a = Input.GetKey(KeyCode.A);
+        var s = Input.GetKey(KeyCode.S);
+        var d = Input.GetKey(KeyCode.D);
+        
+        var changed = (w != _lastW || a != _lastA || s != _lastS || d != _lastD);
     
+        if (changed) {
+            SendMovementInput(w, a, s, d);
+            _lastW = w; _lastA = a; _lastS = s; _lastD = d;
+        }
+    }
+
     private void SpawnEntity(EntityState state)
     {
         var go = Instantiate(EntityPrefab);
