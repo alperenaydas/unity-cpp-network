@@ -19,11 +19,6 @@ namespace Purpose {
         PACKET_CLIENT_INPUT = 4,
     };
 
-    struct PacketHeader {
-        uint16_t type;
-        uint32_t tick;
-    };
-
     struct WelcomePacket {
         uint16_t type = PACKET_WELCOME;
         uint32_t playerID;

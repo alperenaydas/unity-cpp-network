@@ -1,6 +1,6 @@
 add_library(PurposeClient SHARED plugin.cpp
-        RingBuffer.h
-        EntityManager.h)
+        NetworkClient.cpp
+        NetworkClient.h)
 
 target_link_libraries(PurposeClient PRIVATE enet)
 

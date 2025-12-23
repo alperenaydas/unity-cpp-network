@@ -394,7 +394,7 @@ GameObject:
   - component: {fileID: 824692436}
   - component: {fileID: 824692437}
   m_Layer: 0
-  m_Name: PurposeNetworkClient
+  m_Name: PurposeNetworkManager
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -424,9 +424,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 824692435}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 59eefef9cbaf0a949a6bdcda61d4826e, type: 3}
+  m_Script: {fileID: 11500000, guid: 5e476d1927ab53845892997c9ca8d2f1, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PurposeNetworkClient
+  m_EditorClassIdentifier: Assembly-CSharp::NetworkManager
   EntityPrefab: {fileID: 5707701247160890583, guid: cedeebd9cbe0bb342910603bd50b5c1b, type: 3}
 --- !u!1 &832575517
 GameObject:
