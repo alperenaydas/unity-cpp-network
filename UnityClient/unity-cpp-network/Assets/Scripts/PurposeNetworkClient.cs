@@ -35,6 +35,9 @@ public class PurposeNetworkClient : MonoBehaviour {
     private bool _connectedToServer;
     
     private bool _lastW, _lastA, _lastS, _lastD;
+    
+    private float _nextHeartbeatTime = 0f;
+    private const float HEARTBEAT_RATE = 0.1f;
 
     void Start() {
         _logHandler = (msg) => Debug.Log($"<color=cyan>[Native]</color> {msg}");
@@ -82,9 +85,10 @@ public class PurposeNetworkClient : MonoBehaviour {
         
         var changed = (w != _lastW || a != _lastA || s != _lastS || d != _lastD);
     
-        if (changed) {
+        if (changed || Time.time >= _nextHeartbeatTime) {
             SendMovementInput(w, a, s, d);
             _lastW = w; _lastA = a; _lastS = s; _lastD = d;
+            _nextHeartbeatTime = Time.time + HEARTBEAT_RATE;
         }
     }
 
@@ -100,7 +104,7 @@ public class PurposeNetworkClient : MonoBehaviour {
 
     private void UpdateEntityPosition(EntityState state)
     {
-        if (_remoteEntities.TryGetValue(state.networkID, out GameObject go))
+        if (_remoteEntities.TryGetValue(state.networkID, out var go))
         {
             go.transform.position = new Vector3(state.posX, state.posY, state.posZ);
             // go.transform.rotation = Quaternion.Euler(state.rotX, state.rotY, state.rotZ);
