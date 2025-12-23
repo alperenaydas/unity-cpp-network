@@ -63,6 +63,11 @@ public class PurposeNetworkClient : MonoBehaviour {
             {
                 SpawnEntity(update);
             }
+            else if (update.networkID == _myID)
+            {
+                // For Prediction
+                continue; 
+            }
             else
             {
                 UpdateEntityPosition(update);
@@ -92,6 +97,13 @@ public class PurposeNetworkClient : MonoBehaviour {
         }
     }
 
+    private void FixedUpdate()
+    {
+        if (!_connectedToServer) return;
+        
+        ProcessLocalMovementFixed();
+    }
+
     private void SpawnEntity(EntityState state)
     {
         var go = Instantiate(EntityPrefab);
@@ -108,6 +120,23 @@ public class PurposeNetworkClient : MonoBehaviour {
         {
             go.transform.position = new Vector3(state.posX, state.posY, state.posZ);
             // go.transform.rotation = Quaternion.Euler(state.rotX, state.rotY, state.rotZ);
+        }
+    }
+    
+    private void ProcessLocalMovementFixed()
+    {
+        float moveSpeed = 5.0f * Time.fixedDeltaTime; 
+
+        Vector3 inputDir = Vector3.zero;
+        if (Input.GetKey(KeyCode.W)) inputDir.z += 1;
+        if (Input.GetKey(KeyCode.S)) inputDir.z -= 1;
+        if (Input.GetKey(KeyCode.A)) inputDir.x -= 1;
+        if (Input.GetKey(KeyCode.D)) inputDir.x += 1;
+
+        if (inputDir != Vector3.zero) {
+            if (_remoteEntities.TryGetValue(_myID, out var myGO)) {
+                myGO.transform.position += inputDir * moveSpeed;
+            }
         }
     }
 
