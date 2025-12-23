@@ -19,6 +19,11 @@ namespace Purpose {
         PACKET_CLIENT_INPUT = 4,
     };
 
+    struct PacketHeader {
+        uint16_t type;
+        uint32_t tick;
+    };
+
     struct WelcomePacket {
         uint16_t type = PACKET_WELCOME;
         uint32_t playerID;
@@ -28,6 +33,7 @@ namespace Purpose {
     struct EntityState {
         uint16_t type = PACKET_ENTITY_UPDATE;
         uint32_t networkID;
+        uint32_t lastProcessedTick;
         float posX, posY, posZ;
         float rotX, rotY, rotZ;
     };
@@ -39,6 +45,7 @@ namespace Purpose {
 
     struct ClientInput {
         uint16_t type = PACKET_CLIENT_INPUT;
+        uint32_t tick;
         bool w, a, s, d;
     };
 

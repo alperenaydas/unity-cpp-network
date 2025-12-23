@@ -4,8 +4,9 @@
 #include <enet/enet.h>
 #include "Protocol.h"
 
-void SendInput(ENetPeer *peer, bool w, bool a, bool s, bool d) {
+void SendInput(ENetPeer *peer, uint32_t tick, bool w, bool a, bool s, bool d) {
     Purpose::ClientInput input;
+    input.tick = tick;
     input.w = w;
     input.a = a;
     input.s = s;
@@ -34,7 +35,14 @@ int main() {
 
     ENetEvent event;
     int lastStep = -1;
+
+    uint32_t currentTick = 0;
+
+    bool lastW = false, lastA = false, lastS = false, lastD = false;
+
     while (true) {
+        currentTick++;
+
         auto currentTime = std::chrono::steady_clock::now();
         double elapsedSeconds = std::chrono::duration<double>(currentTime - startTime).count();
         int currentStep = static_cast<int>(elapsedSeconds / 5.0) % 8;
@@ -45,29 +53,34 @@ int main() {
         }
 
         if (peer->state == ENET_PEER_STATE_CONNECTED) {
-            if (currentStep != lastStep) {
-                switch (currentStep) {
-                    case 0: SendInput(peer, true, false, false, false);
-                        break;
-                    case 1: SendInput(peer, false, false, false, true);
-                        break;
-                    case 2: SendInput(peer, false, false, true, false);
-                        break;
-                    case 3: SendInput(peer, false, true, false, false);
-                        break;
-                    case 4: SendInput(peer, true, false, false, true);
-                        break;
-                    case 5: SendInput(peer, true, true, false, false);
-                        break;
-                    case 6: SendInput(peer, false, true, true, false);
-                        break;
-                    case 7: SendInput(peer, false, false, true, true);
-                        break;
+            bool w = false, a = false, s = false, d = false;
+
+            switch (currentStep) {
+                case 0: w = true; break;
+                case 1: d = true; break;
+                case 2: s = true; break;
+                case 3: a = true; break;
+                case 4: w = true; d = true; break;
+                case 5: w = true; a = true; break;
+                case 6: s = true; a = true; break;
+                case 7: s = true; d = true; break;
+            }
+
+            bool changed = (w != lastW || a != lastA || s != lastS || d != lastD);
+            bool isHeartbeat = (currentTick % 6 == 0);
+
+            if (changed || isHeartbeat) {
+                SendInput(peer, currentTick, w, a, s, d);
+
+                if (changed) {
+                    std::cout << "[Bot] Step " << currentStep << " | Tick: " << currentTick << std::endl;
+                    lastStep = currentStep;
                 }
-                lastStep = currentStep;
-                std::cout << "[Bot] Changed Step to: " << currentStep << std::endl;
+
+                lastW = w; lastA = a; lastS = s; lastD = d;
             }
         }
+
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
     }
 

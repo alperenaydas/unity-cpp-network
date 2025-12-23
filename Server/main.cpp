@@ -1,12 +1,21 @@
+#include <chrono>
+#include <deque>
 #include <iostream>
 #include <map>
 #include <enet/enet.h>
 #include "Protocol.h"
 
+struct ClientInputData {
+    bool w, a, s, d;
+    uint32_t tick;
+};
+
 struct ServerPlayer {
     uint32_t id;
     float x, y, z;
-    bool w, a, s, d;
+    std::deque<ClientInputData> inputQueue;
+    bool lastW, lastA, lastS, lastD;
+    uint32_t lastProcessedTick = 0;
 };
 
 std::map<ENetPeer *, ServerPlayer> g_serverWorldState;
@@ -19,14 +28,23 @@ int main() {
     address.host = ENET_HOST_ANY;
     address.port = Purpose::SERVER_PORT;
 
-    const float TICK_RATE = 1.0f / 60.0f;
+    const float TICK_RATE = 1.0f / 50.0f;
+    const float MOVE_SPEED = 5.0f * (float)TICK_RATE;
+
+    auto currentTime = std::chrono::high_resolution_clock::now();
+    double accumulator = 0.0;
 
     ENetHost *server = enet_host_create(&address, 32, Purpose::CHANNEL_COUNT, 0, 0);
     std::cout << "[Server] Waiting for Purpose Engine clients..." << std::endl;
 
     ENetEvent event;
     while (true) {
-        while (enet_host_service(server, &event, 10) > 0) {
+        auto newTime = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> frameTime = newTime - currentTime;
+        currentTime = newTime;
+        accumulator += frameTime.count();
+
+        while (enet_host_service(server, &event, 0) > 0) {
             switch (event.type) {
                 case ENET_EVENT_TYPE_CONNECT: {
                     uint32_t newID = g_nextID++;
@@ -59,10 +77,9 @@ int main() {
                     if (packetType == Purpose::PACKET_CLIENT_INPUT) {
                         auto *input = reinterpret_cast<Purpose::ClientInput *>(event.packet->data);
                         auto &playerState = g_serverWorldState[event.peer];
-                        playerState.w = input->w;
-                        playerState.a = input->a;
-                        playerState.s = input->s;
-                        playerState.d = input->d;
+                        if (input->tick > playerState.lastProcessedTick) {
+                            playerState.inputQueue.push_back({input->w, input->a, input->s, input->d, input->tick});
+                        }
                     }
                     enet_packet_destroy(event.packet);
                     break;
@@ -82,22 +99,44 @@ int main() {
         //     g_activePlayers[peer].x += 0.01f;
         // }
 
-        float moveSpeed = 5.0f * TICK_RATE;
-        for (auto &[peer, playerState]: g_serverWorldState) {
-            if (playerState.w) playerState.z += moveSpeed;
-            if (playerState.s) playerState.z -= moveSpeed;
-            if (playerState.a) playerState.x -= moveSpeed;
-            if (playerState.d) playerState.x += moveSpeed;
+        while (accumulator >= TICK_RATE) {
+            for (auto& [peer, playerState] : g_serverWorldState) {
 
-            Purpose::EntityState state;
-            state.type = Purpose::PACKET_ENTITY_UPDATE;
-            state.networkID = playerState.id;
-            state.posX = playerState.x;
-            state.posY = playerState.y;
-            state.posZ = playerState.z;
+                if (!playerState.inputQueue.empty()) {
+                    auto input = playerState.inputQueue.front();
+                    playerState.inputQueue.pop_front();
 
-            ENetPacket *packet = enet_packet_create(&state, sizeof(state), ENET_PACKET_FLAG_UNRELIABLE_FRAGMENT);
-            enet_host_broadcast(server, Purpose::CHANNEL_UNRELIABLE, packet);
+                    playerState.lastW = input.w;
+                    playerState.lastA = input.a;
+                    playerState.lastS = input.s;
+                    playerState.lastD = input.d;
+                    playerState.lastProcessedTick = input.tick;
+                }
+
+                if (playerState.lastW) playerState.z += MOVE_SPEED;
+                if (playerState.lastS) playerState.z -= MOVE_SPEED;
+                if (playerState.lastA) playerState.x -= MOVE_SPEED;
+                if (playerState.lastD) playerState.x += MOVE_SPEED;
+            }
+
+            for (auto const& [peer, data] : g_serverWorldState) {
+                Purpose::EntityState state;
+                state.type = Purpose::PACKET_ENTITY_UPDATE;
+                state.networkID = data.id;
+                state.lastProcessedTick = data.lastProcessedTick;
+                state.posX = data.x;
+                state.posY = data.y;
+                state.posZ = data.z;
+
+                ENetPacket* packet = enet_packet_create(&state, sizeof(state), ENET_PACKET_FLAG_UNRELIABLE_FRAGMENT);
+                enet_host_broadcast(server, Purpose::CHANNEL_UNRELIABLE, packet);
+            }
+
+            enet_host_flush(server);
+
+            accumulator -= TICK_RATE;
         }
+
+
     }
 }

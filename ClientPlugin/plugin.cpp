@@ -116,10 +116,11 @@ EXPORT_API uint32_t GetNextDespawnID() {
     return id;
 }
 
-EXPORT_API void SendMovementInput(bool w, bool a, bool s, bool d) {
+EXPORT_API void SendMovementInput(int tick, bool w, bool a, bool s, bool d) {
     if (!g_peer) return;
 
     Purpose::ClientInput input;
+    input.tick = tick;
     input.w = w;
     input.a = a;
     input.s = s;
