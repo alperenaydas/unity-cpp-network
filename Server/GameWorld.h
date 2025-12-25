@@ -7,12 +7,26 @@
 #include "NetworkServer.h"
 #include "Protocol.h"
 
+struct WorldSnapshot {
+    uint32_t tick;
+    float x, y, z;
+};
+
 struct Player {
     uint32_t id;
     float x, y, z;
+    float yaw;
     bool lastW, lastA, lastS, lastD;
     uint32_t lastProcessedTick;
     std::deque<Purpose::ClientInput> inputQueue;
+    std::deque<WorldSnapshot> positionHistory;
+
+    void SaveHistory(uint32_t tick) {
+        positionHistory.push_front({tick, x, y, z});
+        if (positionHistory.size() > 64) {
+            positionHistory.pop_back();
+        }
+    }
 };
 
 class GameWorld {

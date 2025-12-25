@@ -54,7 +54,6 @@ void GameWorld::UpdatePhysics(const float deltaTime) {
     const float moveDistance = 5.0f * deltaTime;
 
     for (auto& [peer, player] : players) {
-        
         if (!player.inputQueue.empty()) {
             const auto input = player.inputQueue.front();
             player.inputQueue.pop_front();
@@ -64,6 +63,11 @@ void GameWorld::UpdatePhysics(const float deltaTime) {
             player.lastS = input.s;
             player.lastD = input.d;
             player.lastProcessedTick = input.tick;
+            player.yaw = input.mouseYaw;
+
+            if (input.fire) {
+                // Shooting logic will go here
+            }
         }
 
         if (player.lastW) player.z += moveDistance;
@@ -85,8 +89,8 @@ std::vector<Purpose::EntityState> GameWorld::GetSnapshot() {
         state.posX = p.x;
         state.posY = p.y;
         state.posZ = p.z;
-        state.rotX = 0; state.rotY = 0; state.rotZ = 0;
-        
+        state.rotationYaw = p.yaw;
+
         snapshot.push_back(state);
     }
     return snapshot;

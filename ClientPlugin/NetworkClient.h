@@ -16,7 +16,7 @@ public:
     void Disconnect();
     void ServiceNetwork();
 
-    void SendInput(uint32_t tick, bool w, bool a, bool s, bool d) const;
+    void SendInput(uint32_t tick, bool w, bool a, bool s, bool d, bool fire, float yaw) const;
 
     bool PopEntityUpdate(Purpose::EntityState& outState);
     uint32_t PopDespawnID();

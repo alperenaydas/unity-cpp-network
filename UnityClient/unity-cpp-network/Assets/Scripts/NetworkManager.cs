@@ -3,18 +3,16 @@ using UnityEngine;
 
 public class NetworkManager : MonoBehaviour
 {
-    public GameObject EntityPrefab;
+    public PurposePlayer PlayerPrefab;
     
-    private Dictionary<uint, GameObject> _remoteEntities = new();
+    private Dictionary<uint, PurposePlayer> _remotePlayers = new();
     private PredictionSystem _predictor;
     private PurposeInterop.LogDelegate _logHandler;
     
     private uint _myID = 0;
     private bool _connected;
     private uint _currentTick = 0;
-
-    private bool _w, _a, _s, _d;
-
+    
     void Start()
     {
         _logHandler = (msg) => Debug.Log($"<color=cyan>[Native]</color> {msg}");
@@ -35,14 +33,9 @@ public class NetworkManager : MonoBehaviour
 
         while (PurposeInterop.GetNextEntityUpdate(out EntityState update))
         {
-            if (!_remoteEntities.ContainsKey(update.networkID))
+            if (!_remotePlayers.ContainsKey(update.networkID))
             {
                 SpawnEntity(update);
-            }
-            else if (update.networkID == _myID)
-            {
-                if (_predictor != null) 
-                    _predictor.HandleServerReconciliation(update, Time.fixedDeltaTime);
             }
             else
             {
@@ -52,20 +45,12 @@ public class NetworkManager : MonoBehaviour
 
         while ((serverID = PurposeInterop.GetNextDespawnID()) != 0)
         {
-            if (_remoteEntities.TryGetValue(serverID, out var go))
+            if (_remotePlayers.TryGetValue(serverID, out var go))
             {
                 Destroy(go);
-                _remoteEntities.Remove(serverID);
+                _remotePlayers.Remove(serverID);
             }
         }
-
-        _w = Input.GetKey(KeyCode.W);
-        _a = Input.GetKey(KeyCode.A);
-        _s = Input.GetKey(KeyCode.S);
-        _d = Input.GetKey(KeyCode.D);
-        
-        if (Input.GetKeyDown(KeyCode.T) && _remoteEntities.TryGetValue(_myID, out var entity))
-            entity.transform.position += Vector3.right * 2.0f;
     }
 
     void FixedUpdate()
@@ -73,32 +58,42 @@ public class NetworkManager : MonoBehaviour
         if (!_connected) return;
         _currentTick++;
 
-        PurposeInterop.SendMovementInput(_currentTick, _w, _a, _s, _d);
+        var input = PurposeInput.Instance;
 
-        if (_remoteEntities.TryGetValue(_myID, out var myGO))
+        PurposeInterop.SendMovementInput(_currentTick, input.W, input.A, input.S, input.D, input.Fire, input.MouseYaw);
+
+        if (_remotePlayers.TryGetValue(_myID, out var myGO))
         {
             if (_predictor == null) _predictor = new PredictionSystem(myGO.transform);
 
-            Vector3 newPos = PredictionSystem.SimulateMovement(myGO.transform.position, _w, _a, _s, _d, Time.fixedDeltaTime);
-            
+            Vector3 newPos = PredictionSystem.SimulateMovement(myGO.transform.position, input.W, input.A, input.S, input.D, Time.fixedDeltaTime);
             myGO.transform.position = newPos;
+            myGO.transform.rotation = Quaternion.Euler(0, input.MouseYaw, 0);
 
-            _predictor.RecordState(_currentTick, newPos, _w, _a, _s, _d);
+            _predictor.RecordState(_currentTick, newPos, input.W, input.A, input.S, input.D);
         }
     }
 
     private void SpawnEntity(EntityState state)
     {
-        var go = Instantiate(EntityPrefab, new Vector3(state.posX, state.posY, state.posZ), Quaternion.identity);
-        go.name = (state.networkID == _myID) ? "MyPlayer" : $"Remote_{state.networkID}";
-        _remoteEntities.Add(state.networkID, go);
+        var go = Instantiate(PlayerPrefab, new Vector3(state.posX, state.posY, state.posZ), Quaternion.identity);
+        go.InitializePlayer(state.networkID == _myID, state.networkID);
+        _remotePlayers.Add(state.networkID, go);
     }
 
     private void UpdateRemoteEntity(EntityState state)
     {
-        if (_remoteEntities.TryGetValue(state.networkID, out var go))
+        if (_remotePlayers.TryGetValue(state.networkID, out var go))
         {
-            go.transform.position = new Vector3(state.posX, state.posY, state.posZ);
+            if (state.networkID != _myID) 
+            {
+                go.transform.position = new Vector3(state.posX, state.posY, state.posZ);
+                go.transform.rotation = Quaternion.Euler(0, state.rotationYaw, 0);
+            }
+            else 
+            {
+                _predictor?.OnServerReconciliation(state.lastProcessedTick, new Vector3(state.posX, state.posY, state.posZ));
+            }
         }
     }
 

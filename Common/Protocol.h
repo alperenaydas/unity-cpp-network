@@ -30,7 +30,7 @@ namespace Purpose {
         uint32_t networkID;
         uint32_t lastProcessedTick;
         float posX, posY, posZ;
-        float rotX, rotY, rotZ;
+        float rotationYaw;
     };
 
     struct EntityDespawn {
@@ -42,6 +42,8 @@ namespace Purpose {
         uint16_t type = PACKET_CLIENT_INPUT;
         uint32_t tick;
         bool w, a, s, d;
+        bool fire;
+        float mouseYaw;
     };
 
 }

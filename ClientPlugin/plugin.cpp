@@ -37,7 +37,7 @@ extern "C" {
         return g_Client ? g_Client->PopDespawnID() : 0;
     }
 
-    EXPORT_API void SendMovementInput(uint32_t tick, bool w, bool a, bool s, bool d) {
-        if (g_Client) g_Client->SendInput(tick, w, a, s, d);
+    EXPORT_API void SendMovementInput(uint32_t tick, bool w, bool a, bool s, bool d, bool fire, float yaw) {
+        if (g_Client) g_Client->SendInput(tick, w, a, s, d, fire, yaw);
     }
 }

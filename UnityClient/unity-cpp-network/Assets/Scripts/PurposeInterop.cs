@@ -15,8 +15,7 @@ public static class PurposeInterop
     [DllImport(DLL_NAME)] public static extern uint GetAssignedPlayerID();
     [DllImport(DLL_NAME)] public static extern bool GetNextEntityUpdate(out EntityState outState);
     [DllImport(DLL_NAME)] public static extern uint GetNextDespawnID();
-    
-    [DllImport(DLL_NAME)] public static extern void SendMovementInput(uint tick, bool w, bool a, bool s, bool d);
+    [DllImport(DLL_NAME)] public static extern void SendMovementInput(uint tick, bool w, bool a, bool s, bool d, bool fire, float yaw);
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -26,5 +25,5 @@ public struct EntityState
     public uint networkID;
     public uint lastProcessedTick;
     public float posX, posY, posZ;
-    public float rotX, rotY, rotZ;
+    public float rotationYaw;
 }

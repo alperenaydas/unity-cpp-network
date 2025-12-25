@@ -109,12 +109,14 @@ void NetworkClient::ServiceNetwork() {
     }
 }
 
-void NetworkClient::SendInput(uint32_t tick, bool w, bool a, bool s, bool d) const {
+void NetworkClient::SendInput(uint32_t tick, bool w, bool a, bool s, bool d, bool fire, float yaw) const {
     if (!serverPeer) return;
 
     Purpose::ClientInput input;
     input.tick = tick;
     input.w = w; input.a = a; input.s = s; input.d = d;
+    input.fire = fire;
+    input.mouseYaw = yaw;
 
     ENetPacket* packet = enet_packet_create(&input, sizeof(input), ENET_PACKET_FLAG_UNRELIABLE_FRAGMENT);
     enet_peer_send(serverPeer, Purpose::CHANNEL_UNRELIABLE, packet);

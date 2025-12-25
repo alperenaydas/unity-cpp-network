@@ -28,37 +28,28 @@ public class PredictionSystem
         });
     }
 
-    public void HandleServerReconciliation(EntityState serverState, float deltaTime)
+    public void OnServerReconciliation(uint serverTick, Vector3 serverPos)
     {
-        _history.RemoveAll(state => state.tick < serverState.lastProcessedTick);
+        int index = _history.FindIndex(s => s.tick == serverTick);
+        if (index == -1) return;
 
-        int historyIndex = _history.FindIndex(state => state.tick == serverState.lastProcessedTick);
-
-        if (historyIndex != -1)
+        if (Vector3.Distance(_history[index].position, serverPos) > TOLERANCE)
         {
-            HistoryState recordedState = _history[historyIndex];
-            Vector3 serverPos = new Vector3(serverState.posX, serverState.posY, serverState.posZ);
+            Debug.LogWarning($"[Reconciliation] Desync at tick {serverTick}. Correcting...");
+            
+            _targetTransform.position = serverPos;
 
-            float error = Vector3.Distance(recordedState.position, serverPos);
-
-            if (error > TOLERANCE)
+            for (int i = index; i < _history.Count; i++)
             {
-                _targetTransform.position = serverPos;
-
-                for (int i = historyIndex + 1; i < _history.Count; i++)
-                {
-                    HistoryState oldInput = _history[i];
-                    
-                    Vector3 newPos = SimulateMovement(_targetTransform.position, oldInput.w, oldInput.a, oldInput.s, oldInput.d, deltaTime);
-
-                    _targetTransform.position = newPos;
-
-                    var correctedState = _history[i];
-                    correctedState.position = newPos;
-                    _history[i] = correctedState;
-                }
+                var snapshot = _history[i];
+                _targetTransform.position = SimulateMovement(_targetTransform.position, snapshot.w, snapshot.a, snapshot.s, snapshot.d, Time.fixedDeltaTime);
+                
+                snapshot.position = _targetTransform.position;
+                _history[i] = snapshot;
             }
         }
+        
+        _history.RemoveRange(0, index);
     }
 
     public static Vector3 SimulateMovement(Vector3 start, bool w, bool a, bool s, bool d, float dt)
