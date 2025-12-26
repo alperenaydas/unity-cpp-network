@@ -18,7 +18,10 @@ extern "C" {
     }
 
     EXPORT_API void DisconnectFromServer() {
-        if (g_Client) g_Client->Disconnect();
+        if (g_Client) {
+            g_Client->Disconnect();
+            g_Client.reset();
+        }
     }
 
     EXPORT_API void ServiceNetwork() {
@@ -29,8 +32,11 @@ extern "C" {
         return g_Client ? g_Client->GetAssignedID() : 0;
     }
 
-    EXPORT_API bool GetNextEntityUpdate(Purpose::EntityState* outState) {
-        return g_Client ? g_Client->PopEntityUpdate(*outState) : false;
+    EXPORT_API bool GetNextEntityUpdate(Purpose::EntityData* outData) {
+        if (g_Client && outData) {
+            return g_Client->PopEntityData(*outData);
+        }
+        return false;
     }
 
     EXPORT_API uint32_t GetNextDespawnID() {
@@ -38,6 +44,14 @@ extern "C" {
     }
 
     EXPORT_API void SendMovementInput(uint32_t tick, bool w, bool a, bool s, bool d, bool fire, float yaw) {
-        if (g_Client) g_Client->SendInput(tick, w, a, s, d, fire, yaw);
+        if (g_Client) {
+            g_Client->SendInput(tick, w, a, s, d, fire, yaw);
+        }
+    }
+
+    EXPORT_API void GetNetworkMetrics(Purpose::NetworkMetrics* outMetrics) {
+        if (g_Client && outMetrics) {
+            *outMetrics = g_Client->GetMetrics();
+        }
     }
 }

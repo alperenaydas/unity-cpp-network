@@ -16,12 +16,14 @@ public:
     void Disconnect();
     void ServiceNetwork();
 
-    void SendInput(uint32_t tick, bool w, bool a, bool s, bool d, bool fire, float yaw) const;
+    void SendInput(uint32_t tick, bool w, bool a, bool s, bool d, bool fire, float yaw);
 
-    bool PopEntityUpdate(Purpose::EntityState& outState);
+    bool PopEntityData(Purpose::EntityData& outData);
     uint32_t PopDespawnID();
-    uint32_t GetAssignedID() const { return assignedPlayerID; }
-    
+
+    uint32_t GetAssignedID() const { return assignedPlayerID.load(); }
+    Purpose::NetworkMetrics GetMetrics() const;
+
     void SetLogCallback(LogCallback cb) { logger = cb; }
 
 private:
@@ -31,14 +33,16 @@ private:
     ENetPeer* serverPeer = nullptr;
     std::atomic<uint32_t> assignedPlayerID{ 0 };
 
-    static const int BUFFER_SIZE = 1024;
-    Purpose::EntityState entityBuffer[BUFFER_SIZE];
-    int head = 0;
-    int tail = 0;
-    std::mutex bufferMutex;
+    static const int ENTITY_BUFFER_SIZE = 4096;
+    Purpose::EntityData entityBuffer[ENTITY_BUFFER_SIZE];
+    std::atomic<int> head{ 0 };
+    std::atomic<int> tail{ 0 };
 
     std::deque<uint32_t> despawnQueue;
     std::mutex despawnMutex;
+
+    std::atomic<uint64_t> totalBytesReceived{ 0 };
+    std::atomic<uint64_t> totalBytesSent{ 0 };
 
     LogCallback logger = nullptr;
 };

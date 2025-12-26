@@ -1,7 +1,7 @@
 ﻿#include "NetworkServer.h"
 #include <iostream>
 
-NetworkServer::NetworkServer(const uint16_t port) : port(port) {}
+NetworkServer::NetworkServer(uint16_t port) : port(port) {}
 
 NetworkServer::~NetworkServer() {
     Shutdown();
@@ -9,7 +9,7 @@ NetworkServer::~NetworkServer() {
 
 bool NetworkServer::Initialize() {
     if (enet_initialize() != 0) {
-        std::cerr << "[Network] ENet Init Failed." << std::endl;
+        std::cerr << "[Network] Failed to initialize ENet." << std::endl;
         return false;
     }
 
@@ -17,8 +17,8 @@ bool NetworkServer::Initialize() {
     address.host = ENET_HOST_ANY;
     address.port = port;
 
-    serverHost = enet_host_create(&address, 32, Purpose::CHANNEL_COUNT, 0, 0);
-    if (serverHost == nullptr) {
+    serverHost = enet_host_create(&address, 1024, Purpose::CHANNEL_COUNT, 0, 0);
+    if (!serverHost) {
         std::cerr << "[Network] Failed to create ENet host." << std::endl;
         return false;
     }
@@ -27,15 +27,7 @@ bool NetworkServer::Initialize() {
     return true;
 }
 
-void NetworkServer::Shutdown() {
-    if (serverHost) {
-        enet_host_destroy(serverHost);
-        serverHost = nullptr;
-    }
-    enet_deinitialize();
-}
-
-void NetworkServer::PollEvents() const {
+void NetworkServer::PollEvents() {
     if (!serverHost) return;
 
     ENetEvent event;
@@ -45,42 +37,51 @@ void NetworkServer::PollEvents() const {
                 if (onConnect) onConnect(event.peer);
                 break;
 
-            case ENET_EVENT_TYPE_DISCONNECT:
-                if (onDisconnect) onDisconnect(event.peer);
-                break;
-
             case ENET_EVENT_TYPE_RECEIVE:
-                if (onPacket) {
-                    if (event.packet->dataLength >= sizeof(uint16_t)) {
-                        uint16_t type = *reinterpret_cast<uint16_t*>(event.packet->data);
-                        onPacket(event.peer, type, event.packet->data);
-                    }
+                if (onPacket && event.packet->dataLength >= sizeof(uint16_t)) {
+                    uint16_t type = *reinterpret_cast<uint16_t*>(event.packet->data);
+                    onPacket(event.peer, type, event.packet->data);
                 }
                 enet_packet_destroy(event.packet);
                 break;
-            case ENET_EVENT_TYPE_NONE:
+
+            case ENET_EVENT_TYPE_DISCONNECT:
+                if (onDisconnect) onDisconnect(event.peer);
+                event.peer->data = nullptr;
+                break;
+
+            default:
                 break;
         }
     }
 }
 
-void NetworkServer::Broadcast(const Purpose::EntityState& state) const {
+void NetworkServer::Broadcast(const void* data, size_t size, bool reliable) {
     if (!serverHost) return;
 
-    ENetPacket* packet = enet_packet_create(&state, sizeof(state), ENET_PACKET_FLAG_UNRELIABLE_FRAGMENT);
-    enet_host_broadcast(serverHost, Purpose::CHANNEL_UNRELIABLE, packet);
+    enet_uint32 flags = reliable ? ENET_PACKET_FLAG_RELIABLE : ENET_PACKET_FLAG_UNRELIABLE_FRAGMENT;
+    ENetPacket* packet = enet_packet_create(data, size, flags);
+
+    enet_host_broadcast(serverHost, reliable ? Purpose::CHANNEL_RELIABLE : Purpose::CHANNEL_UNRELIABLE, packet);
 }
 
 void NetworkServer::SendToPeer(ENetPeer* peer, const void* data, size_t size, bool reliable) {
     if (!peer) return;
 
-    uint32_t flags = reliable ? ENET_PACKET_FLAG_RELIABLE : 0;
+    enet_uint32 flags = reliable ? ENET_PACKET_FLAG_RELIABLE : ENET_PACKET_FLAG_UNRELIABLE_FRAGMENT;
     ENetPacket* packet = enet_packet_create(data, size, flags);
 
-    int channel = reliable ? Purpose::CHANNEL_RELIABLE : Purpose::CHANNEL_UNRELIABLE;
-    enet_peer_send(peer, channel, packet);
+    enet_peer_send(peer, reliable ? Purpose::CHANNEL_RELIABLE : Purpose::CHANNEL_UNRELIABLE, packet);
 }
 
-void NetworkServer::Flush() const {
-    if(serverHost) enet_host_flush(serverHost);
+void NetworkServer::Flush() {
+    if (serverHost) enet_host_flush(serverHost);
+}
+
+void NetworkServer::Shutdown() {
+    if (serverHost) {
+        enet_host_destroy(serverHost);
+        serverHost = nullptr;
+        enet_deinitialize();
+    }
 }

@@ -17,13 +17,13 @@ bool NetworkClient::Connect(const char* ip, uint16_t port) {
     if (clientHost) Disconnect();
 
     assignedPlayerID = 0;
-    
+    head = 0;
+    tail = 0;
+    totalBytesReceived = 0;
+    totalBytesSent = 0;
+
     {
-        std::lock_guard lock(bufferMutex);
-        head = tail = 0;
-    }
-    {
-        std::lock_guard lock(despawnMutex);
+        std::lock_guard<std::mutex> lock(despawnMutex);
         despawnQueue.clear();
     }
 
@@ -72,6 +72,8 @@ void NetworkClient::ServiceNetwork() {
             case ENET_EVENT_TYPE_RECEIVE: {
                 if (event.packet->dataLength < sizeof(uint16_t)) break;
 
+                totalBytesReceived += event.packet->dataLength;
+
                 uint16_t type = *reinterpret_cast<uint16_t*>(event.packet->data);
 
                 if (type == Purpose::PACKET_WELCOME) {
@@ -79,18 +81,24 @@ void NetworkClient::ServiceNetwork() {
                     assignedPlayerID = p->playerID;
                     Log("[Client] Assigned ID received.");
                 }
-                else if (type == Purpose::PACKET_ENTITY_UPDATE) {
-                    auto* p = reinterpret_cast<Purpose::EntityState*>(event.packet->data);
-                    
-                    std::lock_guard lock(bufferMutex);
-                    entityBuffer[head] = *p;
-                    head = (head + 1) % BUFFER_SIZE;
-                    if (head == tail) tail = (tail + 1) % BUFFER_SIZE;
+                else if (type == Purpose::PACKET_WORLD_STATE) {
+                    auto* p = reinterpret_cast<Purpose::WorldStatePacket*>(event.packet->data);
+
+                    for (uint32_t i = 0; i < p->entityCount; ++i) {
+                        int currentHead = head.load();
+                        entityBuffer[currentHead] = p->entities[i];
+
+                        int nextHead = (currentHead + 1) % ENTITY_BUFFER_SIZE;
+                        head.store(nextHead);
+
+                        if (nextHead == tail.load()) {
+                            tail.store((tail.load() + 1) % ENTITY_BUFFER_SIZE);
+                        }
+                    }
                 }
                 else if (type == Purpose::PACKET_ENTITY_DESPAWN) {
                     auto* p = reinterpret_cast<Purpose::EntityDespawn*>(event.packet->data);
-                    
-                    std::lock_guard lock(despawnMutex);
+                    std::lock_guard<std::mutex> lock(despawnMutex);
                     despawnQueue.push_back(p->networkID);
                 }
 
@@ -100,42 +108,60 @@ void NetworkClient::ServiceNetwork() {
             case ENET_EVENT_TYPE_DISCONNECT:
                 Log("[Client] Disconnected from server.");
                 serverPeer = nullptr;
-                break;
-            case ENET_EVENT_TYPE_CONNECT:
-                break;
-            case ENET_EVENT_TYPE_NONE:
+                assignedPlayerID = 0;
                 break;
         }
     }
 }
 
-void NetworkClient::SendInput(uint32_t tick, bool w, bool a, bool s, bool d, bool fire, float yaw) const {
+void NetworkClient::SendInput(uint32_t tick, bool w, bool a, bool s, bool d, bool fire, float yaw) {
     if (!serverPeer) return;
 
     Purpose::ClientInput input;
     input.tick = tick;
-    input.w = w; input.a = a; input.s = s; input.d = d;
-    input.fire = fire;
+    input.w = w ? 1 : 0;
+    input.a = a ? 1 : 0;
+    input.s = s ? 1 : 0;
+    input.d = d ? 1 : 0;
+    input.fire = fire ? 1 : 0;
     input.mouseYaw = yaw;
+
+    totalBytesSent += sizeof(input);
 
     ENetPacket* packet = enet_packet_create(&input, sizeof(input), ENET_PACKET_FLAG_UNRELIABLE_FRAGMENT);
     enet_peer_send(serverPeer, Purpose::CHANNEL_UNRELIABLE, packet);
 }
 
-bool NetworkClient::PopEntityUpdate(Purpose::EntityState& outState) {
-    std::lock_guard lock(bufferMutex);
-    if (head == tail) return false;
+bool NetworkClient::PopEntityData(Purpose::EntityData& outData) {
+    int currentTail = tail.load();
+    if (currentTail == head.load()) return false;
 
-    outState = entityBuffer[tail];
-    tail = (tail + 1) % BUFFER_SIZE;
+    outData = entityBuffer[currentTail];
+    tail.store((currentTail + 1) % ENTITY_BUFFER_SIZE);
     return true;
 }
 
 uint32_t NetworkClient::PopDespawnID() {
-    std::lock_guard lock(despawnMutex);
+    std::lock_guard<std::mutex> lock(despawnMutex);
     if (despawnQueue.empty()) return 0;
 
-    uint32_t id = despawnQueue.front(); // FIFO
+    uint32_t id = despawnQueue.front();
     despawnQueue.pop_front();
     return id;
+}
+
+Purpose::NetworkMetrics NetworkClient::GetMetrics() const {
+    Purpose::NetworkMetrics m = {};
+    if (!serverPeer) return m;
+
+    m.ping = serverPeer->roundTripTime;
+    m.packetLoss = (serverPeer->packetLoss * 100) / 0x10000;
+
+    m.totalBytesSent = totalBytesSent.load();
+    m.totalBytesReceived = totalBytesReceived.load();
+
+    m.incomingBandwidth = static_cast<float>(serverPeer->host->incomingBandwidth);
+    m.outgoingBandwidth = static_cast<float>(serverPeer->host->outgoingBandwidth);
+
+    return m;
 }
