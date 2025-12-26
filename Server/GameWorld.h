@@ -30,6 +30,9 @@ struct Player {
     std::deque<Purpose::ClientInput> inputQueue;
     std::deque<WorldSnapshot> positionHistory;
 
+    bool isAlive = true;
+    float respawnTimer = 0.0f;
+
     void SaveHistory(uint32_t tick) {
         positionHistory.push_front({tick, x, y, z});
         if (positionHistory.size() > 64) positionHistory.pop_back();

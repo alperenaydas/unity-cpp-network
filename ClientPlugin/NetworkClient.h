@@ -45,4 +45,17 @@ private:
     std::atomic<uint64_t> totalBytesSent{ 0 };
 
     LogCallback logger = nullptr;
+
+    std::atomic<uint64_t> bytesReceivedThisSecond{ 0 };
+    std::atomic<uint64_t> bytesSentThisSecond{ 0 };
+
+    std::atomic<float> currentInKBps{ 0.0f };
+    std::atomic<float> currentOutKBps{ 0.0f };
+
+    std::chrono::steady_clock::time_point lastMetricTime;
+
+    uint32_t lastReceivedTick = 0;
+    uint32_t packetsExpected = 0;
+    uint32_t packetsReceived = 0;
+    std::atomic<uint32_t> manualPacketLoss{ 0 };
 };

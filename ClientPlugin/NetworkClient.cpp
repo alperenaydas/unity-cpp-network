@@ -66,12 +66,35 @@ void NetworkClient::Disconnect() {
 void NetworkClient::ServiceNetwork() {
     if (!clientHost) return;
 
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastMetricTime).count();
+
+    if (elapsed >= 1000) {
+        currentInKBps = (bytesReceivedThisSecond.load() / 1024.0f);
+        currentOutKBps = (bytesSentThisSecond.load() / 1024.0f);
+
+        if (packetsExpected > 0) {
+            float lossFraction = 1.0f - ((float)packetsReceived / (float)packetsExpected);
+            manualPacketLoss = (uint32_t)(std::max(0.0f, lossFraction) * 100.0f);
+        }
+
+        bytesReceivedThisSecond = 0;
+        bytesSentThisSecond = 0;
+        packetsExpected = 0;
+        packetsReceived = 0;
+        lastMetricTime = now;
+    }
+
     ENetEvent event;
     while (enet_host_service(clientHost, &event, 0) > 0) {
         switch (event.type) {
             case ENET_EVENT_TYPE_RECEIVE: {
-                if (event.packet->dataLength < sizeof(uint16_t)) break;
+                if (event.packet->dataLength < sizeof(uint16_t)) {
+                    enet_packet_destroy(event.packet);
+                    break;
+                }
 
+                bytesReceivedThisSecond += event.packet->dataLength;
                 totalBytesReceived += event.packet->dataLength;
 
                 uint16_t type = *reinterpret_cast<uint16_t*>(event.packet->data);
@@ -83,6 +106,20 @@ void NetworkClient::ServiceNetwork() {
                 }
                 else if (type == Purpose::PACKET_WORLD_STATE) {
                     auto* p = reinterpret_cast<Purpose::WorldStatePacket*>(event.packet->data);
+
+                    if (p->entityCount > 0) {
+                        uint32_t currentTick = p->entities[0].lastProcessedTick;
+
+                        if (lastReceivedTick != 0 && currentTick > lastReceivedTick) {
+                            uint32_t gap = currentTick - lastReceivedTick;
+                            packetsExpected += gap;
+                        } else if (lastReceivedTick == 0) {
+                            packetsExpected += 1;
+                        }
+
+                        packetsReceived += 1;
+                        lastReceivedTick = currentTick;
+                    }
 
                     for (uint32_t i = 0; i < p->entityCount; ++i) {
                         int currentHead = head.load();
@@ -105,10 +142,15 @@ void NetworkClient::ServiceNetwork() {
                 enet_packet_destroy(event.packet);
                 break;
             }
+
             case ENET_EVENT_TYPE_DISCONNECT:
                 Log("[Client] Disconnected from server.");
                 serverPeer = nullptr;
                 assignedPlayerID = 0;
+                lastReceivedTick = 0;
+                break;
+
+            default:
                 break;
         }
     }
@@ -126,6 +168,7 @@ void NetworkClient::SendInput(uint32_t tick, bool w, bool a, bool s, bool d, boo
     input.fire = fire ? 1 : 0;
     input.mouseYaw = yaw;
 
+    bytesSentThisSecond += sizeof(input);
     totalBytesSent += sizeof(input);
 
     ENetPacket* packet = enet_packet_create(&input, sizeof(input), ENET_PACKET_FLAG_UNRELIABLE_FRAGMENT);
@@ -155,13 +198,13 @@ Purpose::NetworkMetrics NetworkClient::GetMetrics() const {
     if (!serverPeer) return m;
 
     m.ping = serverPeer->roundTripTime;
-    m.packetLoss = (serverPeer->packetLoss * 100) / 0x10000;
+    m.packetLoss = manualPacketLoss.load();
 
     m.totalBytesSent = totalBytesSent.load();
     m.totalBytesReceived = totalBytesReceived.load();
 
-    m.incomingBandwidth = static_cast<float>(serverPeer->host->incomingBandwidth);
-    m.outgoingBandwidth = static_cast<float>(serverPeer->host->outgoingBandwidth);
+    m.incomingBandwidth = currentInKBps.load();
+    m.outgoingBandwidth = currentOutKBps.load();
 
     return m;
 }

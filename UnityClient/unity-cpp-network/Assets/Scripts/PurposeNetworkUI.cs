@@ -30,7 +30,7 @@ public class PurposeNetworkUI : MonoBehaviour
             $"<color=green>RTT:</color> {m.ping}ms\n" +
             $"<color=red>LOSS:</color> {m.packetLoss}%\n" +
             $"<color=yellow>PLAYERS:</color> {_networkManager.PlayerCount}\n" +
-            $"<color=blue>DL:</color> {inKB} KB/s\n" +
-            $"<color=blue>UL:</color> {outKB} KB/s";
+            $"<color=cyan>DL:</color> {m.incomingBandwidth:F2} KB/s\n" +
+            $"<color=cyan>UL:</color> {m.outgoingBandwidth:F2} KB/s";
     }
 }

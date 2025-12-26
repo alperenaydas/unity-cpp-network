@@ -60,6 +60,18 @@ void GameWorld::OnPacketReceived(ENetPeer* peer, const uint16_t type, void* data
 
 void GameWorld::UpdatePhysics(const float deltaTime) {
     for (auto& [id, player] : players) {
+        if (!player.isAlive) {
+            player.respawnTimer -= deltaTime;
+            if (player.respawnTimer <= 0) {
+                player.isAlive = true;
+                player.x = static_cast<float>(rand() % 100 - 50);
+                player.z = static_cast<float>(rand() % 100 - 50);
+                std::cout << "[Game] Player " << id << " respawned." << std::endl;
+            }
+            player.inputQueue.clear();
+            continue;
+        }
+
         while (!player.inputQueue.empty()) {
             player.lastInput = player.inputQueue.front();
             player.inputQueue.pop_front();
@@ -110,7 +122,8 @@ Purpose::WorldStatePacket GameWorld::GenerateWorldState() {
 
 void GameWorld::ProcessFire(uint32_t shooterID, float yaw) {
     auto it = players.find(shooterID);
-    if (it == players.end()) return;
+    if (it == players.end() || !it->second.isAlive) return;
+
     Player& shooter = it->second;
 
     float rad = yaw * (3.14159f / 180.0f);
@@ -120,7 +133,7 @@ void GameWorld::ProcessFire(uint32_t shooterID, float yaw) {
     float closestDist = 100.0f;
 
     for (auto& [id, target] : players) {
-        if (id == shooterID) continue;
+        if (id == shooterID || !target.isAlive) continue;
         if (id == 1001) continue;
 
         float dist;
@@ -134,7 +147,13 @@ void GameWorld::ProcessFire(uint32_t shooterID, float yaw) {
 
     if (hitID != 0) {
         printf("[Server] Player %u KILLED Player %u!\n", shooterID, hitID);
-        enet_peer_disconnect(players[hitID].peer, 0);
+
+        Player& victim = players[hitID];
+        victim.isAlive = false;
+        victim.respawnTimer = 2.0f;
+
+        victim.x = -9999.0f;
+        victim.z = -9999.0f;
     }
 }
 

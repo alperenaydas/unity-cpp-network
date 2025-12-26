@@ -18,7 +18,6 @@ public class PurposeInput : MonoBehaviour
     public void RegisterLocalPlayer(Transform playerTransform)
     {
         _localPlayerTransform = playerTransform;
-        Debug.Log("<color=green>[Input]</color> Local Player registered for Yaw calculation.");
     }
 
     private void Update()
