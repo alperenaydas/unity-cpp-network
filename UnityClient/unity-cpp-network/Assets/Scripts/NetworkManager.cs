@@ -107,8 +107,10 @@ public class NetworkManager : MonoBehaviour
 
         if (state.networkID != _myID) 
         {
-            player.transform.position = new Vector3(state.posX, state.posY, state.posZ);
-            player.transform.rotation = Quaternion.Euler(0, state.rotationYaw, 0);
+            var sPos = new Vector3(state.posX, state.posY, state.posZ);
+            var sRot = Quaternion.Euler(0, state.rotationYaw, 0);
+        
+            player.ApplyNetworkUpdate(sPos, sRot);
         }
         else 
         {

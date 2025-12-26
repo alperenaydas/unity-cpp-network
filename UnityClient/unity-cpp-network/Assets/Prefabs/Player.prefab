@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 5410133483192360884}
   - component: {fileID: 2270239411000538056}
   - component: {fileID: 7738866352068436880}
+  - component: {fileID: 2260577137177002146}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -47,6 +48,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: efe4c41ea070ac24fa746226ca1b6fdc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PurposePlayer
+  _interpolator: {fileID: 2260577137177002146}
   _playerMesh: {fileID: 5652575785418476933}
   _playerMaterial: {fileID: 2100000, guid: 214ed9b8d59a1c3488eebeda593e610e, type: 2}
   _enemyMaterial: {fileID: 2100000, guid: 1b5729a28127dc54e98a3049829537db, type: 2}
@@ -64,6 +66,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PurposeController
   IsLocalPlayer: 0
+--- !u!114 &2260577137177002146
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5284624560901896372}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5959728da3c02154a8fa4cc43c3bc36c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EntityInterpolator
+  _interpolationDelay: 0.1
 --- !u!1 &6492316627845930364
 GameObject:
   m_ObjectHideFlags: 0
