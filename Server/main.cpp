@@ -39,7 +39,7 @@ int main() {
     auto currentTime = std::chrono::high_resolution_clock::now();
     double accumulator = 0.0;
 
-    std::cout << "--- Purpose Server Running (50Hz) ---" << std::endl;
+    std::cout << "--- Purpose Server Running (50Hz) | Delta Compression Active ---" << std::endl;
 
     while (true) {
         auto newTime = std::chrono::high_resolution_clock::now();
@@ -49,23 +49,19 @@ int main() {
 
         server.PollEvents();
 
+        bool physicsUpdated = false;
         while (accumulator >= TICK_RATE) {
             world.UpdatePhysics(TICK_RATE);
-
-            Purpose::WorldStatePacket worldState = world.GenerateWorldState();
-
-            if (worldState.entityCount > 0) {
-                size_t packetSize = sizeof(uint16_t) + sizeof(uint32_t) + (sizeof(Purpose::EntityData) * worldState.entityCount);
-                server.Broadcast(&worldState, packetSize, false);
-            }
-
             accumulator -= TICK_RATE;
+            physicsUpdated = true;
         }
 
-        server.Flush();
+        if (physicsUpdated) {
+            world.BroadcastWorldState(&server);
+        }
+
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 
-    server.Shutdown();
     return 0;
 }

@@ -4,16 +4,18 @@ using UnityEngine;
 public class NetworkManager : MonoBehaviour
 {
     public PurposePlayer PlayerPrefab;
-    
+
     private Dictionary<uint, PurposePlayer> _remotePlayers = new();
     private PredictionSystem _predictor;
     private PurposeInterop.LogDelegate _logHandler;
-    
+
     private uint _myID = 0;
     private bool _connected;
     private uint _currentTick = 0;
 
+    private byte[] _bitBuffer = new byte[4096];
     public int PlayerCount => _remotePlayers.Count;
+
 
     void Start()
     {
@@ -30,31 +32,84 @@ public class NetworkManager : MonoBehaviour
 
         PurposeInterop.ServiceNetwork();
 
-        if (_myID == 0)
-        {
-            _myID = PurposeInterop.GetAssignedPlayerID();
-        }
+        if (_myID == 0) _myID = PurposeInterop.GetAssignedPlayerID();
 
-        while (PurposeInterop.GetNextEntityUpdate(out EntityData update))
+        int bytesRead = PurposeInterop.GetLatestBitstream(_bitBuffer, _bitBuffer.Length);
+        if (bytesRead > 0)
         {
-            if (!_remotePlayers.ContainsKey(update.networkID))
+            BitReader reader = new BitReader(_bitBuffer, bytesRead * 8);
+
+            ushort typeLo = (ushort)reader.ReadBits(8);
+            ushort typeHi = (ushort)reader.ReadBits(8);
+            ushort type = (ushort)(typeLo | (typeHi << 8));
+
+            if (type != 2)
             {
-                SpawnEntity(update);
+                Debug.LogWarning($"[Network] Received unknown packet type via bitstream: {type}");
+                return;
             }
-            else
+
+            uint serverTick = reader.ReadBits(32);
+            uint baselineTick = reader.ReadBits(32);
+            int entityCount = (int)reader.ReadBits(8);
+
+            for (int i = 0; i < entityCount; i++)
             {
-                UpdateEntityState(update);
+                uint id = reader.ReadBits(32);
+                bool moved = reader.ReadBit();
+
+                int qX = 0, qZ = 0;
+                if (moved)
+                {
+                    qX = reader.ReadInt(32);
+                    qZ = reader.ReadInt(32);
+                }
+
+                float yaw = reader.ReadFloat();
+                ProcessNetworkEntity(id, moved, qX, qZ, yaw);
             }
         }
 
         uint despawnID;
         while ((despawnID = PurposeInterop.GetNextDespawnID()) != 0)
         {
-            if (_remotePlayers.TryGetValue(despawnID, out var player))
+            if (_remotePlayers.TryGetValue(despawnID, out var p))
             {
-                Debug.Log($"<color=red>[Network]</color> Despawning Entity {despawnID}");
-                Destroy(player.gameObject);
+                Debug.Log($"<color=red>[Network]</color> Despawn {despawnID}");
+                Destroy(p.gameObject);
                 _remotePlayers.Remove(despawnID);
+            }
+        }
+    }
+
+    private void ProcessNetworkEntity(uint id, bool moved, int qX, int qZ, float yaw)
+    {
+        if (!_remotePlayers.TryGetValue(id, out var player))
+        {
+            Vector3 spawnPos = moved ? new Vector3(qX / 100f, 0, qZ / 100f) : Vector3.zero;
+
+            var instance = Instantiate(PlayerPrefab, spawnPos, Quaternion.identity);
+
+            bool isLocal = (id == _myID);
+            instance.InitializePlayer(isLocal, id);
+
+            if (isLocal) PurposeInput.Instance.RegisterLocalPlayer(instance.transform);
+
+            _remotePlayers.Add(id, instance);
+            player = instance;
+        }
+
+        if (id != _myID)
+        {
+            if (moved)
+            {
+                Vector3 newPos = new Vector3(qX / 100f, 0, qZ / 100f);
+                Quaternion newRot = Quaternion.Euler(0, yaw, 0);
+                player.ApplyNetworkUpdate(newPos, newRot);
+            }
+            else
+            {
+                player.ApplyNetworkUpdate(player.transform.position, Quaternion.Euler(0, yaw, 0));
             }
         }
     }
@@ -73,8 +128,8 @@ public class NetworkManager : MonoBehaviour
             if (_predictor == null) _predictor = new PredictionSystem(myPlayer.transform);
 
             Vector3 predictedPos = PredictionSystem.SimulateMovement(
-                myPlayer.transform.position, 
-                input.W, input.A, input.S, input.D, 
+                myPlayer.transform.position,
+                input.W, input.A, input.S, input.D,
                 Time.fixedDeltaTime
             );
 
@@ -85,40 +140,7 @@ public class NetworkManager : MonoBehaviour
         }
     }
 
-    private void SpawnEntity(EntityData state)
-    {
-        Vector3 spawnPos = new Vector3(state.posX, state.posY, state.posZ);
-        var playerInstance = Instantiate(PlayerPrefab, spawnPos, Quaternion.identity);
-    
-        bool isLocal = (state.networkID == _myID);
-        playerInstance.InitializePlayer(isLocal, state.networkID);
-    
-        if (isLocal)
-        {
-            PurposeInput.Instance.RegisterLocalPlayer(playerInstance.transform);
-        }
-    
-        _remotePlayers.Add(state.networkID, playerInstance);
-    }
-
-    private void UpdateEntityState(EntityData state)
-    {
-        if (!_remotePlayers.TryGetValue(state.networkID, out var player)) return;
-
-        if (state.networkID != _myID) 
-        {
-            var sPos = new Vector3(state.posX, state.posY, state.posZ);
-            var sRot = Quaternion.Euler(0, state.rotationYaw, 0);
-        
-            player.ApplyNetworkUpdate(sPos, sRot);
-        }
-        else 
-        {
-            _predictor?.OnServerReconciliation(state.lastProcessedTick, new Vector3(state.posX, state.posY, state.posZ));
-        }
-    }
-
-    private void OnApplicationQuit() 
+    private void OnDestroy()
     {
         if (_connected) PurposeInterop.DisconnectFromServer();
     }

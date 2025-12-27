@@ -33,15 +33,17 @@ public static class PurposeInterop
 
     [DllImport(DLL_NAME, CallingConvention = CallingConvention.Cdecl)] 
     public static extern void SendMovementInput(uint tick, bool w, bool a, bool s, bool d, bool fire, float yaw);
-}
 
+    [DllImport(DLL_NAME, CallingConvention = CallingConvention.Cdecl)] 
+    public static extern int GetLatestBitstream([In, Out] byte[] outBuffer, int maxLen);
+}
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct EntityData
 {
     public uint networkID;
     public uint lastProcessedTick;
-    public float posX, posY, posZ;
+    public int qX, qY, qZ;
     public float rotationYaw;
 }
 

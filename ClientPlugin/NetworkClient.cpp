@@ -1,4 +1,5 @@
 ﻿#include "NetworkClient.h"
+#include <iostream>
 
 NetworkClient::NetworkClient() {
     enet_initialize();
@@ -43,6 +44,7 @@ bool NetworkClient::Connect(const char* ip, uint16_t port) {
     ENetEvent event;
     if (enet_host_service(clientHost, &event, 2000) > 0 && event.type == ENET_EVENT_TYPE_CONNECT) {
         Log("[Client] Connected to server.");
+        lastMetricTime = std::chrono::steady_clock::now();
         return true;
     }
 
@@ -105,37 +107,39 @@ void NetworkClient::ServiceNetwork() {
                     Log("[Client] Assigned ID received.");
                 }
                 else if (type == Purpose::PACKET_WORLD_STATE) {
-                    auto* p = reinterpret_cast<Purpose::WorldStatePacket*>(event.packet->data);
+                    packetsReceived++; // Metric
 
-                    if (p->entityCount > 0) {
-                        uint32_t currentTick = p->entities[0].lastProcessedTick;
-
-                        if (lastReceivedTick != 0 && currentTick > lastReceivedTick) {
-                            uint32_t gap = currentTick - lastReceivedTick;
-                            packetsExpected += gap;
-                        } else if (lastReceivedTick == 0) {
-                            packetsExpected += 1;
-                        }
-
-                        packetsReceived += 1;
-                        lastReceivedTick = currentTick;
+                    {
+                        std::lock_guard<std::mutex> lock(bitstreamMutex);
+                        latestBitstream.assign(
+                            event.packet->data,
+                            event.packet->data + event.packet->dataLength
+                        );
+                        hasNewBitstream = true;
                     }
 
-                    for (uint32_t i = 0; i < p->entityCount; ++i) {
-                        int currentHead = head.load();
-                        entityBuffer[currentHead] = p->entities[i];
+                    if (event.packet->dataLength >= 6) {
+                        uint8_t* ptr = event.packet->data + 2;
 
-                        int nextHead = (currentHead + 1) % ENTITY_BUFFER_SIZE;
-                        head.store(nextHead);
+                        uint32_t receivedTick = (ptr[0] << 24) | (ptr[1] << 16) | (ptr[2] << 8) | ptr[3];
 
-                        if (nextHead == tail.load()) {
-                            tail.store((tail.load() + 1) % ENTITY_BUFFER_SIZE);
+                        if (lastReceivedTick != 0 && receivedTick > lastReceivedTick) {
+                            uint32_t gap = receivedTick - lastReceivedTick - 1;
+                            packetsExpected += gap;
                         }
+
+                        packetsExpected++;
+                        lastReceivedTick = receivedTick;
+
+                        Purpose::ClientAck ack;
+                        ack.tick = receivedTick;
+                        ENetPacket* ackPacket = enet_packet_create(&ack, sizeof(ack), ENET_PACKET_FLAG_UNRELIABLE_FRAGMENT);
+                        enet_peer_send(serverPeer, Purpose::CHANNEL_UNRELIABLE, ackPacket);
                     }
                 }
                 else if (type == Purpose::PACKET_ENTITY_DESPAWN) {
                     auto* p = reinterpret_cast<Purpose::EntityDespawn*>(event.packet->data);
-                    std::lock_guard<std::mutex> lock(despawnMutex);
+                    std::lock_guard lock(despawnMutex);
                     despawnQueue.push_back(p->networkID);
                 }
 
@@ -175,6 +179,18 @@ void NetworkClient::SendInput(uint32_t tick, bool w, bool a, bool s, bool d, boo
     enet_peer_send(serverPeer, Purpose::CHANNEL_UNRELIABLE, packet);
 }
 
+int NetworkClient::CopyLatestBitstream(uint8_t* outBuffer, int maxLen) {
+    std::lock_guard<std::mutex> lock(bitstreamMutex);
+    if (!hasNewBitstream) return 0;
+
+    int len = static_cast<int>(latestBitstream.size());
+    if (len > maxLen) len = maxLen;
+
+    memcpy(outBuffer, latestBitstream.data(), len);
+    hasNewBitstream = false;
+    return len;
+}
+
 bool NetworkClient::PopEntityData(Purpose::EntityData& outData) {
     int currentTail = tail.load();
     if (currentTail == head.load()) return false;
@@ -199,10 +215,8 @@ Purpose::NetworkMetrics NetworkClient::GetMetrics() const {
 
     m.ping = serverPeer->roundTripTime;
     m.packetLoss = manualPacketLoss.load();
-
     m.totalBytesSent = totalBytesSent.load();
     m.totalBytesReceived = totalBytesReceived.load();
-
     m.incomingBandwidth = currentInKBps.load();
     m.outgoingBandwidth = currentOutKBps.load();
 

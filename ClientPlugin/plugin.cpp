@@ -54,4 +54,9 @@ extern "C" {
             *outMetrics = g_Client->GetMetrics();
         }
     }
+
+    EXPORT_API int GetLatestBitstream(uint8_t* outBuffer, int maxLen) {
+        if (!g_Client) return 0;
+        return g_Client->CopyLatestBitstream(outBuffer, maxLen);
+    }
 }

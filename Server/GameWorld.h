@@ -9,7 +9,7 @@ class NetworkServer;
 
 struct WorldSnapshot {
     uint32_t tick;
-    float x, y, z;
+    int32_t qx, qy, qz;
 };
 
 struct Ray {
@@ -25,6 +25,7 @@ struct Player {
     float yaw;
 
     uint32_t lastProcessedTick = 0;
+    uint32_t lastAckedTick = 0;
     Purpose::ClientInput lastInput;
 
     std::deque<Purpose::ClientInput> inputQueue;
@@ -34,8 +35,14 @@ struct Player {
     float respawnTimer = 0.0f;
 
     void SaveHistory(uint32_t tick) {
-        positionHistory.push_front({tick, x, y, z});
-        if (positionHistory.size() > 64) positionHistory.pop_back();
+        WorldSnapshot snap;
+        snap.tick = tick;
+        snap.qx = static_cast<int32_t>(x * Purpose::QUANT_RES);
+        snap.qy = static_cast<int32_t>(y * Purpose::QUANT_RES);
+        snap.qz = static_cast<int32_t>(z * Purpose::QUANT_RES);
+
+        positionHistory.push_front(snap);
+        if (positionHistory.size() > 128) positionHistory.pop_back();
     }
 };
 
@@ -48,7 +55,7 @@ public:
     void UpdatePhysics(float deltaTime);
     void ProcessFire(uint32_t shooterID, float yaw);
 
-    Purpose::WorldStatePacket GenerateWorldState();
+    void BroadcastWorldState(NetworkServer* server);
 
 private:
     std::map<uint32_t, Player> players;

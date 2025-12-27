@@ -3,6 +3,9 @@
 #include <deque>
 #include <mutex>
 #include <atomic>
+#include <vector>
+#include <algorithm>
+
 #include "Protocol.h"
 
 using LogCallback = void(*)(const char*);
@@ -20,6 +23,8 @@ public:
 
     bool PopEntityData(Purpose::EntityData& outData);
     uint32_t PopDespawnID();
+
+    int CopyLatestBitstream(uint8_t* outBuffer, int maxLen);
 
     uint32_t GetAssignedID() const { return assignedPlayerID.load(); }
     Purpose::NetworkMetrics GetMetrics() const;
@@ -41,21 +46,22 @@ private:
     std::deque<uint32_t> despawnQueue;
     std::mutex despawnMutex;
 
+    // Metrics
     std::atomic<uint64_t> totalBytesReceived{ 0 };
     std::atomic<uint64_t> totalBytesSent{ 0 };
-
     LogCallback logger = nullptr;
-
     std::atomic<uint64_t> bytesReceivedThisSecond{ 0 };
     std::atomic<uint64_t> bytesSentThisSecond{ 0 };
-
     std::atomic<float> currentInKBps{ 0.0f };
     std::atomic<float> currentOutKBps{ 0.0f };
-
     std::chrono::steady_clock::time_point lastMetricTime;
-
     uint32_t lastReceivedTick = 0;
     uint32_t packetsExpected = 0;
     uint32_t packetsReceived = 0;
     std::atomic<uint32_t> manualPacketLoss{ 0 };
+
+    // Bitstream Storage
+    std::vector<uint8_t> latestBitstream;
+    std::mutex bitstreamMutex;
+    bool hasNewBitstream = false;
 };
