@@ -25,9 +25,9 @@ A custom-build, tick-based networking architecture designed for real-time games.
 - [x] Authoritative Movement Logic
 - [x] Client-side Prediction & Reconciliation
 - [x] Standalone Stress-Test Bot
-- [ ] Entity Interpolation: Sliding remote players smoothly between network snapshots.
+- [x] Entity Interpolation: Sliding remote players smoothly between network snapshots.
 - [ ] Rotation/Yaw Synchronization: Optimizing packet structure for orientation.
-- [ ] Lag Compensation: Implementing the "Rewind" logic for hit registration.
+- [x] Lag Compensation: Implementing the "Rewind" logic for hit registration.
 
 ## Getting Started
   Prerequisites:
