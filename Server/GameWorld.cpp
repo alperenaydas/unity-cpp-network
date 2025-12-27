@@ -1,8 +1,8 @@
 ﻿#include "GameWorld.h"
 #include "NetworkServer.h"
 #include <cmath>
-#include <iostream>
 #include <algorithm>
+#include <iostream>
 
 void GameWorld::OnClientConnect(ENetPeer* peer, NetworkServer* server) {
     const uint32_t newID = nextID++;
@@ -10,9 +10,9 @@ void GameWorld::OnClientConnect(ENetPeer* peer, NetworkServer* server) {
     Player newPlayer;
     newPlayer.peer = peer;
     newPlayer.id = newID;
-    newPlayer.x = static_cast<float>(rand() % 100 - 50);
+    newPlayer.x = 0;
     newPlayer.y = 0;
-    newPlayer.z = static_cast<float>(rand() % 100 - 50);
+    newPlayer.z = 10;
 
     players[newID] = newPlayer;
 
@@ -59,16 +59,19 @@ void GameWorld::OnPacketReceived(ENetPeer* peer, const uint16_t type, void* data
 }
 
 void GameWorld::UpdatePhysics(const float deltaTime) {
+    currentServerTick++;
+
     for (auto& [id, player] : players) {
         if (!player.isAlive) {
             player.respawnTimer -= deltaTime;
             if (player.respawnTimer <= 0) {
                 player.isAlive = true;
-                player.x = static_cast<float>(rand() % 100 - 50);
-                player.z = static_cast<float>(rand() % 100 - 50);
+                player.x = 0;
+                player.z = 10;
                 std::cout << "[Game] Player " << id << " respawned." << std::endl;
             }
             player.inputQueue.clear();
+            player.SaveHistory(currentServerTick);
             continue;
         }
 
@@ -94,9 +97,9 @@ void GameWorld::UpdatePhysics(const float deltaTime) {
             if (player.lastInput.fire) {
                 ProcessFire(player.id, player.yaw);
             }
-
-            player.SaveHistory(player.lastProcessedTick);
         }
+
+        player.SaveHistory(currentServerTick);
     }
 }
 
@@ -126,6 +129,14 @@ void GameWorld::ProcessFire(uint32_t shooterID, float yaw) {
 
     Player& shooter = it->second;
 
+    float rttMs = (float)shooter.peer->roundTripTime;
+    float rttTicks = (rttMs / 1000.0f) * 50.0f;
+    float interpDelayTicks = 5.0f;
+
+    double renderTick = (double)currentServerTick - (interpDelayTicks + (rttTicks / 2.0));
+
+    if (renderTick < 0) renderTick = 0;
+
     float rad = yaw * (3.14159f / 180.0f);
     Ray ray = { shooter.x, shooter.z, sinf(rad), cosf(rad) };
 
@@ -134,7 +145,8 @@ void GameWorld::ProcessFire(uint32_t shooterID, float yaw) {
 
     for (auto& [id, target] : players) {
         if (id == shooterID || !target.isAlive) continue;
-        if (id == 1001) continue;
+
+        GetPositionAtTick(target, renderTick, target.x, target.z);
 
         float dist;
         if (RayIntersectsCircle(ray, target.x, target.z, 0.5f, dist)) {
@@ -146,15 +158,36 @@ void GameWorld::ProcessFire(uint32_t shooterID, float yaw) {
     }
 
     if (hitID != 0) {
-        printf("[Server] Player %u KILLED Player %u!\n", shooterID, hitID);
+        printf("[Server] Player %u HIT Player %u (Rewind: %.2f | Curr: %u)\n",
+               shooterID, hitID, renderTick, currentServerTick);
 
         Player& victim = players[hitID];
         victim.isAlive = false;
         victim.respawnTimer = 2.0f;
-
         victim.x = -9999.0f;
         victim.z = -9999.0f;
     }
+}
+
+bool GameWorld::GetPositionAtTick(const Player& target, double renderTick, float& outX, float& outZ) {
+    if (target.positionHistory.size() < 2) return false;
+
+    for (size_t i = 0; i < target.positionHistory.size() - 1; i++) {
+        const auto& newer = target.positionHistory[i];
+        const auto& older = target.positionHistory[i + 1];
+
+        if (newer.tick >= renderTick && older.tick <= renderTick) {
+            double delta = static_cast<double>(newer.tick) - static_cast<double>(older.tick);
+            if (delta <= 0.0001) return false;
+
+            double alpha = (renderTick - static_cast<double>(older.tick)) / delta;
+
+            outX = older.x + (newer.x - older.x) * static_cast<float>(alpha);
+            outZ = older.z + (newer.z - older.z) * static_cast<float>(alpha);
+            return true;
+        }
+    }
+    return false;
 }
 
 bool GameWorld::RayIntersectsCircle(Ray ray, float cx, float cz, float radius, float& distance) {

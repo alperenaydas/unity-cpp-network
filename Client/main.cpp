@@ -6,27 +6,15 @@
 #include "NetworkClient.h"
 #include "Protocol.h"
 
+// Constants for the visualization
+const float OSCILLATION_SPEED = 2.0f; // Speed of left-right movement
+const float OSCILLATION_WIDTH = 5.0f; // How far left/right it goes
+const bool IS_TARGET_BOT = true;      // Set to false for the "Shooter" bot
+
 struct BotState {
     float x = 0, z = 0;
     bool active = false;
 };
-
-float GetDistance(float x1, float z1, float x2, float z2) {
-    return sqrtf(powf(x2 - x1, 2) + powf(z2 - z1, 2));
-}
-
-float CalculateYaw(float dx, float dz) {
-    return atan2f(dx, dz) * (180.0f / 3.14159265f);
-}
-
-void NavigateTo(float myX, float myZ, float targetX, float targetZ, bool& w, bool& a, bool& s, bool& d) {
-    float threshold = 0.1f;
-    if (targetZ > myZ + threshold) w = true;
-    else if (targetZ < myZ - threshold) s = true;
-
-    if (targetX > myX + threshold) d = true;
-    else if (targetX < myX - threshold) a = true;
-}
 
 int main() {
     NetworkClient client;
@@ -39,7 +27,10 @@ int main() {
     std::map<uint32_t, BotState> worldView;
     uint32_t myID = 0;
 
-    std::cout << "[Bot] Started Stress-Test Logic Loop..." << std::endl;
+    // Use a high-resolution clock for smooth movement math
+    auto startTime = std::chrono::steady_clock::now();
+
+    std::cout << "[Bot] Started Visualization Logic..." << std::endl;
 
     while (true) {
         currentTick++;
@@ -58,48 +49,37 @@ int main() {
         }
 
         if (myID == 0 || worldView.find(myID) == worldView.end()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(20)); // 50Hz sleep
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
             continue;
-        }
-
-        BotState& me = worldView[myID];
-        uint32_t targetID = 0;
-        float closestDist = 9999.0f;
-
-        for (auto const& [id, entity] : worldView) {
-            if (id == myID || !entity.active) continue;
-            float d = GetDistance(me.x, me.z, entity.x, entity.z);
-            if (d < closestDist) {
-                closestDist = d;
-                targetID = id;
-            }
         }
 
         bool w = false, a = false, s = false, d = false, fire = false;
         float yaw = 0;
 
-        if (targetID != 0) {
-            BotState& target = worldView[targetID];
-            float dx = target.x - me.x;
-            float dz = target.z - me.z;
+        if (IS_TARGET_BOT) {
+            // Target Bot Logic: Oscillate left and right continuously
+            auto currentTime = std::chrono::steady_clock::now();
+            float elapsed = std::chrono::duration<float>(currentTime - startTime).count();
 
-            yaw = CalculateYaw(dx, dz);
+            // Calculate target X position based on a Sine wave
+            float targetX = std::sin(elapsed * OSCILLATION_SPEED) * OSCILLATION_WIDTH;
+            float currentX = worldView[myID].x;
 
-            if (closestDist < 15.0f) {
-                fire = (currentTick % 10 == 0);
-            }
+            // Simple "P-Controller" style movement to reach the target X
+            if (targetX > currentX + 0.1f) d = true;
+            else if (targetX < currentX - 0.1f) a = true;
 
-            if (closestDist > 3.0f) {
-                NavigateTo(me.x, me.z, target.x, target.z, w, a, s, d);
-            }
-        } else {
-            if (GetDistance(me.x, me.z, 0, 0) > 2.0f) {
-                NavigateTo(me.x, me.z, 0, 0, w, a, s, d);
-                yaw = CalculateYaw(0 - me.x, 0 - me.z);
-            }
+            // Look forward (assuming Z is forward)
+            yaw = 0.0f;
+        }
+        else {
+            // Your existing "Shooter" logic can stay here if you want
+            // the bot to try and shoot the target bot.
         }
 
         client.SendInput(currentTick, w, a, s, d, fire, yaw);
+
+        // Match server tick rate (e.g., 50Hz = 20ms)
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
 

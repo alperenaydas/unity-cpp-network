@@ -53,8 +53,10 @@ public:
 private:
     std::map<uint32_t, Player> players;
     uint32_t nextID = 1001;
+    uint32_t currentServerTick = 0;
 
     const float MOVE_SPEED = 5.0f;
 
     bool RayIntersectsCircle(Ray ray, float cx, float cz, float radius, float& distance);
+    bool GetPositionAtTick(const Player& target, double renderTick, float& outX, float& outZ);
 };
