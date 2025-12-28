@@ -61,7 +61,6 @@ private:
     std::atomic<uint32_t> manualPacketLoss{ 0 };
 
     // Bitstream Storage
-    std::vector<uint8_t> latestBitstream;
+    std::deque<std::vector<uint8_t>> packetQueue;
     std::mutex bitstreamMutex;
-    bool hasNewBitstream = false;
 };

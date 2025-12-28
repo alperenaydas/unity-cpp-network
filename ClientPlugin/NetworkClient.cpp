@@ -1,5 +1,7 @@
 ﻿#include "NetworkClient.h"
+#include <memory>
 #include <iostream>
+#include <algorithm>
 
 NetworkClient::NetworkClient() {
     enet_initialize();
@@ -26,6 +28,11 @@ bool NetworkClient::Connect(const char* ip, uint16_t port) {
     {
         std::lock_guard<std::mutex> lock(despawnMutex);
         despawnQueue.clear();
+    }
+
+    {
+        std::lock_guard lock(bitstreamMutex);
+        packetQueue.clear();
     }
 
     clientHost = enet_host_create(nullptr, 1, Purpose::CHANNEL_COUNT, 0, 0);
@@ -107,20 +114,18 @@ void NetworkClient::ServiceNetwork() {
                     Log("[Client] Assigned ID received.");
                 }
                 else if (type == Purpose::PACKET_WORLD_STATE) {
-                    packetsReceived++; // Metric
+                    packetsReceived++;
 
                     {
                         std::lock_guard<std::mutex> lock(bitstreamMutex);
-                        latestBitstream.assign(
+                        packetQueue.emplace_back(
                             event.packet->data,
                             event.packet->data + event.packet->dataLength
                         );
-                        hasNewBitstream = true;
                     }
 
                     if (event.packet->dataLength >= 6) {
                         uint8_t* ptr = event.packet->data + 2;
-
                         uint32_t receivedTick = (ptr[0] << 24) | (ptr[1] << 16) | (ptr[2] << 8) | ptr[3];
 
                         if (lastReceivedTick != 0 && receivedTick > lastReceivedTick) {
@@ -141,6 +146,15 @@ void NetworkClient::ServiceNetwork() {
                     auto* p = reinterpret_cast<Purpose::EntityDespawn*>(event.packet->data);
                     std::lock_guard lock(despawnMutex);
                     despawnQueue.push_back(p->networkID);
+                }
+                else if (type == Purpose::PACKET_DEBUG_HIT) {
+                    {
+                        std::lock_guard lock(bitstreamMutex);
+                        packetQueue.emplace_back(
+                            event.packet->data,
+                            event.packet->data + event.packet->dataLength
+                        );
+                    }
                 }
 
                 enet_packet_destroy(event.packet);
@@ -180,14 +194,19 @@ void NetworkClient::SendInput(uint32_t tick, bool w, bool a, bool s, bool d, boo
 }
 
 int NetworkClient::CopyLatestBitstream(uint8_t* outBuffer, int maxLen) {
-    std::lock_guard<std::mutex> lock(bitstreamMutex);
-    if (!hasNewBitstream) return 0;
+    std::lock_guard lock(bitstreamMutex);
 
-    int len = static_cast<int>(latestBitstream.size());
+    if (packetQueue.empty()) return 0;
+
+    const std::vector<uint8_t>& packetData = packetQueue.front();
+
+    int len = static_cast<int>(packetData.size());
     if (len > maxLen) len = maxLen;
 
-    memcpy(outBuffer, latestBitstream.data(), len);
-    hasNewBitstream = false;
+    memcpy(outBuffer, packetData.data(), len);
+
+    packetQueue.pop_front();
+
     return len;
 }
 

@@ -20,6 +20,7 @@ namespace Purpose {
         PACKET_ENTITY_DESPAWN = 3,
         PACKET_CLIENT_INPUT = 4,
         PACKET_CLIENT_ACK = 5,
+        PACKET_DEBUG_HIT = 6
     };
 
     struct NetworkMetrics {

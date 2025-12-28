@@ -52,8 +52,8 @@ public:
     void OnClientDisconnect(ENetPeer* peer, NetworkServer* server);
     void OnPacketReceived(ENetPeer* peer, uint16_t type, void* data);
 
-    void UpdatePhysics(float deltaTime);
-    void ProcessFire(uint32_t shooterID, float yaw);
+    void UpdatePhysics(float deltaTime, NetworkServer* server);
+    void ProcessFire(uint32_t shooterID, float yaw, NetworkServer* server);
 
     void BroadcastWorldState(NetworkServer* server);
 

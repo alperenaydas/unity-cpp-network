@@ -15,7 +15,8 @@ public class NetworkManager : MonoBehaviour
 
     private byte[] _bitBuffer = new byte[4096];
     public int PlayerCount => _remotePlayers.Count;
-
+    
+    private List<DebugHit> _debugHits = new();
 
     void Start()
     {
@@ -34,41 +35,53 @@ public class NetworkManager : MonoBehaviour
 
         if (_myID == 0) _myID = PurposeInterop.GetAssignedPlayerID();
 
-        int bytesRead = PurposeInterop.GetLatestBitstream(_bitBuffer, _bitBuffer.Length);
-        if (bytesRead > 0)
+        int bytesRead;
+        while ((bytesRead = PurposeInterop.GetLatestBitstream(_bitBuffer, _bitBuffer.Length)) > 0)
         {
-            BitReader reader = new BitReader(_bitBuffer, bytesRead * 8);
+            var reader = new BitReader(_bitBuffer, bytesRead * 8);
 
-            ushort typeLo = (ushort)reader.ReadBits(8);
-            ushort typeHi = (ushort)reader.ReadBits(8);
-            ushort type = (ushort)(typeLo | (typeHi << 8));
+            var typeLo = (ushort)reader.ReadBits(8);
+            var typeHi = (ushort)reader.ReadBits(8);
+            var type = (ushort)(typeLo | (typeHi << 8));
 
-            if (type != 2)
+            if (type == 2) // World State
             {
-                Debug.LogWarning($"[Network] Received unknown packet type via bitstream: {type}");
-                return;
-            }
+                uint serverTick = reader.ReadBits(32);
+                uint baselineTick = reader.ReadBits(32);
+                int entityCount = (int)reader.ReadBits(8);
 
-            uint serverTick = reader.ReadBits(32);
-            uint baselineTick = reader.ReadBits(32);
-            int entityCount = (int)reader.ReadBits(8);
-
-            for (int i = 0; i < entityCount; i++)
-            {
-                uint id = reader.ReadBits(32);
-                bool moved = reader.ReadBit();
-
-                int qX = 0, qZ = 0;
-                if (moved)
+                for (int i = 0; i < entityCount; i++)
                 {
-                    qX = reader.ReadInt(32);
-                    qZ = reader.ReadInt(32);
+                    uint id = reader.ReadBits(32);
+                    bool moved = reader.ReadBit();
+                    int qX = 0, qZ = 0;
+                    if (moved)
+                    {
+                        qX = reader.ReadInt(32);
+                        qZ = reader.ReadInt(32);
+                    }
+                    float yaw = reader.ReadFloat();
+                    ProcessNetworkEntity(id, moved, qX, qZ, yaw);
                 }
-
-                float yaw = reader.ReadFloat();
-                ProcessNetworkEntity(id, moved, qX, qZ, yaw);
+            }
+            else if (type == 6) // Debug Hit
+            {
+                float hitX = reader.ReadFloat();
+                float hitZ = reader.ReadFloat();
+        
+                _debugHits.Add(new DebugHit { 
+                    pos = new Vector3(hitX, 0, hitZ), 
+                    expireTime = Time.time + 2.0f
+                });
+                Debug.Log($"<color=green>HIT RECEIVED</color> {hitX}, {hitZ}");
+            }
+            else 
+            {
+                Debug.LogWarning($"Received Unknown Packet Type: {type}");
             }
         }
+        
+        _debugHits.RemoveAll(x => Time.time > x.expireTime);
 
         uint despawnID;
         while ((despawnID = PurposeInterop.GetNextDespawnID()) != 0)
@@ -144,4 +157,19 @@ public class NetworkManager : MonoBehaviour
     {
         if (_connected) PurposeInterop.DisconnectFromServer();
     }
+    
+    void OnDrawGizmos() {
+        Gizmos.color = Color.red;
+        foreach (var hit in _debugHits) {
+            Vector3 drawPos = hit.pos + Vector3.up * 0.5f; 
+            Gizmos.DrawWireSphere(drawPos, 0.5f); 
+            Gizmos.DrawLine(drawPos, drawPos + Vector3.up * 2);
+        }
+    }
+    
+    private struct DebugHit { 
+        public Vector3 pos; 
+        public float expireTime; 
+    }
 }
+

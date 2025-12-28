@@ -51,7 +51,7 @@ int main() {
 
         bool physicsUpdated = false;
         while (accumulator >= TICK_RATE) {
-            world.UpdatePhysics(TICK_RATE);
+            world.UpdatePhysics(TICK_RATE, g_Server);
             accumulator -= TICK_RATE;
             physicsUpdated = true;
         }
