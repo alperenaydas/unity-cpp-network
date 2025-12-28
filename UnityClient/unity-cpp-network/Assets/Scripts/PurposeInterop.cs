@@ -41,19 +41,19 @@ public static class PurposeInterop
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct EntityData
 {
-    public uint networkID;
-    public uint lastProcessedTick;
+    public uint NetworkID;
+    public uint LastProcessedTick;
     public int qX, qY, qZ;
-    public float rotationYaw;
+    public float RotationYaw;
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct NetworkMetrics
 {
-    public uint ping;
-    public uint packetLoss;
-    public ulong totalBytesSent;
-    public ulong totalBytesReceived;
-    public float incomingBandwidth;
-    public float outgoingBandwidth;
+    public uint Ping;
+    public uint PacketLoss;
+    public ulong TotalBytesSent;
+    public ulong TotalBytesReceived;
+    public float IncomingBandwidth;
+    public float OutgoingBandwidth;
 }
