@@ -6,12 +6,12 @@
 ![Unity](https://img.shields.io/badge/Unity-6000.3.2f1-black.svg)
 ![Networking](https://img.shields.io/badge/Networking-ENet%20%7C%20UDP-red.svg)
 
-## 📖 Overview
+## Overview
 **Purpose** is a custom game networking stack designed for **competitive, high-frequency (50Hz+) shooters**. Unlike generic solutions, it implements a custom bit-packed protocol to achieve minimal bandwidth usage and sub-tick precision.
 
 The core objective was to engineer a system capable of handling **100+ concurrent clients** on a single thread with **Server-Side Rewind (Lag Compensation)** and **Delta Compression**, proving that high-performance networking doesn't require massive cloud infrastructure—just efficient code.
 
-## 🚀 Key Features
+## Key Features
 
 ### 1. Competitive Architecture
 - **Authoritative Server:** C++ Dedicated Server running a fixed-step 50Hz physics loop.
@@ -30,7 +30,7 @@ The core objective was to engineer a system capable of handling **100+ concurren
 
 ---
 
-## 🛠 Tech Stack
+## Tech Stack
 
 | Component | Technology | Description |
 | :--- | :--- | :--- |
@@ -41,7 +41,7 @@ The core objective was to engineer a system capable of handling **100+ concurren
 
 ---
 
-## 🧠 Engineering Deep Dive
+## Engineering Deep Dive
 
 ### The "BitStream" Protocol
 Standard C structs align to bytes (8 bits). In *Purpose*, we treat the packet as a continuous stream of bits. This allows us to use variable-length encoding for game state.
@@ -58,7 +58,7 @@ When a player fires, the packet includes the `RenderTick` they were looking at.
 
 ---
 
-## 📦 Installation & Build
+## Installation & Build
 
 ### Prerequisites
 - [CMake](https://cmake.org/) (3.10 or later).
@@ -90,7 +90,7 @@ Artifacts location:
 
 ---
 
-## 📊 Performance Metrics
+## Performance Metrics
 *Measurements taken with 100 concurrent clients on local server.*
 
 | Metric | Value | Note |
