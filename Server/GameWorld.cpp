@@ -16,13 +16,9 @@ void GameWorld::OnClientConnect(ENetPeer* peer, NetworkServer* server) {
     p.id = id;
     p.peer = peer;
 
-    p.x = 0.0f;
-    p.y = 0.0f;
-    p.z = 0.0f;
+    SpawnPlayer(p);
 
     peer->data = reinterpret_cast<void*>(static_cast<uintptr_t>(id));
-
-    std::cout << "[Game] Player " << id << " joined. Spawning at 0,0,0" << std::endl;
 
     Purpose::WelcomePacket w;
     w.playerID = id;
@@ -34,16 +30,17 @@ void GameWorld::OnClientDisconnect(ENetPeer* peer, NetworkServer* server) {
     if (!peer->data) return;
     auto id = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(peer->data));
 
-    if (players.erase(id)) {
+    if (players.count(id)) {
+        grid.RemoveEntity(id);
+        players.erase(id);
         std::cout << "[Game] Player " << id << " disconnected." << std::endl;
-
         Purpose::EntityDespawn d;
         d.networkID = id;
         server->Broadcast(&d, sizeof(d), true);
     }
 }
 
-void GameWorld::OnPacketReceived(ENetPeer* peer, uint16_t type, void* data) {
+void GameWorld::OnPacketReceived(ENetPeer* peer, uint16_t type, void* data, NetworkServer* server) {
     if (!peer->data) return;
     auto id = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(peer->data));
     auto it = players.find(id);
@@ -59,19 +56,29 @@ void GameWorld::OnPacketReceived(ENetPeer* peer, uint16_t type, void* data) {
             it->second.lastAckedTick = ack->tick;
         }
     }
+    else if (type == Purpose::PACKET_CLIENT_SPECTATOR) {
+        it->second.isSpectator = true;
+        it->second.isAlive = false;
+        grid.RemoveEntity(id);
+        std::cout << "[Game] Player " << id << " became a spectator." << std::endl;
+
+        Purpose::EntityDespawn d;
+        d.networkID = id;
+        server->Broadcast(&d, sizeof(d), true);
+    }
 }
 
 void GameWorld::UpdatePhysics(float deltaTime, NetworkServer* server) {
     currentServerTick++;
 
     for (auto& [id, p] : players) {
+        if (p.isSpectator) {
+            continue;
+        }
         if (!p.isAlive) {
             p.respawnTimer -= deltaTime;
             if (p.respawnTimer <= 0) {
-                p.isAlive = true;
-                p.x = 0.0f;
-                p.z = 0.0f;
-                std::cout << "[Game] Player " << id << " respawned at 0,0,0" << std::endl;
+                SpawnPlayer(p);
             }
             p.inputQueue.clear();
             p.SaveHistory(currentServerTick);
@@ -95,32 +102,62 @@ void GameWorld::UpdatePhysics(float deltaTime, NetworkServer* server) {
             p.lastProcessedTick = in.tick;
             if (in.fire) ProcessFire(p.id, p.yaw, server);
         }
+
+        grid.UpdateEntity(id, p.x, p.z);
         p.SaveHistory(currentServerTick);
     }
 }
 
 void GameWorld::BroadcastWorldState(NetworkServer* server) {
-    for (auto& [recipID, recipient] : players) {
-        BitWriter writer(1400);
+    static std::vector<uint32_t> nearbyEntities;
 
+    for (auto& [recipID, recipient] : players) {
+        nearbyEntities.clear();
+
+        if (recipient.isSpectator) {
+            for (const auto& [id, p] : players) {
+                if (!p.isSpectator && p.isAlive) {
+                    nearbyEntities.push_back(id);
+                }
+            }
+        }
+        else {
+            grid.GetRelevantEntities(recipient.x, recipient.z, nearbyEntities);
+        }
+
+        BitWriter writer(1400);
         writer.WriteBits(Purpose::PACKET_WORLD_STATE & 0xFF, 8);
         writer.WriteBits((Purpose::PACKET_WORLD_STATE >> 8) & 0xFF, 8);
-
         writer.WriteBits(currentServerTick, 32);
         writer.WriteBits(recipient.lastAckedTick, 32);
-        writer.WriteBits(static_cast<uint32_t>(players.size()), 8);
+
+        uint32_t count = 0;
+        for (uint32_t targetID : nearbyEntities) {
+            if (players.find(targetID) == players.end()) continue;
+
+            if (players[targetID].isSpectator) continue;
+
+            count++;
+        }
+
+        writer.WriteBits(count, 10);
 
         WorldSnapshot* baseline = GetSnapshot(recipient, recipient.lastAckedTick);
 
-        for (auto& [targetID, target] : players) {
+        for (uint32_t targetID : nearbyEntities) {
+            if (players.find(targetID) == players.end()) continue;
+
+            Player& target = players[targetID];
+            if (target.isSpectator) continue;
+
             writer.WriteBits(target.id, 32);
 
             int32_t curQX = static_cast<int32_t>(target.x * Purpose::QUANT_RES);
             int32_t curQZ = static_cast<int32_t>(target.z * Purpose::QUANT_RES);
 
             bool moved = true;
-            if (baseline && targetID == recipID) {
-                moved = (curQX != baseline->qx || curQZ != baseline->qz);
+
+            if (baseline) {
             }
 
             writer.WriteBit(moved);
@@ -130,7 +167,9 @@ void GameWorld::BroadcastWorldState(NetworkServer* server) {
             }
             writer.WriteFloat(target.yaw);
         }
+
         writer.WriteAlign();
+
         server->SendToPeer(recipient.peer, writer.GetData(), writer.GetByteLength(), false);
     }
 }
@@ -156,17 +195,35 @@ void GameWorld::ProcessFire(uint32_t shooterID, float yaw, NetworkServer* server
         float tx, tz;
         if (GetPositionAtTick(target, renderTick, tx, tz)) {
             float d;
-            // 0.5f is the hitbox radius
             if (RayIntersectsCircle(ray, tx, tz, 0.5f, d) && d < closest) {
                 closest = d;
                 hitID = id;
-                rewoundX = tx; // Store the ghost position
+                rewoundX = tx;
                 rewoundZ = tz;
             }
         }
     }
 
     if (hitID != 0) {
+        players[hitID].isAlive = false;
+        players[hitID].respawnTimer = 2.0f;
+        players[hitID].x = -9999.0f;
+
+        std::vector<uint32_t> witnesses;
+        grid.GetRelevantEntities(players[hitID].x, players[hitID].z, witnesses);
+
+        Purpose::EntityDespawn d;
+        d.networkID = hitID;
+
+        for (uint32_t witnessID : witnesses) {
+            if (witnessID == hitID) continue;
+
+            auto it = players.find(witnessID);
+            if (it != players.end()) {
+                server->SendToPeer(it->second.peer, &d, sizeof(d), true);
+            }
+        }
+
         std::cout << "[Game] Player " << shooterID << " HIT " << hitID << std::endl;
         BitWriter writer(64);
         writer.WriteBits(Purpose::PACKET_DEBUG_HIT & 0xFF, 8);
@@ -174,14 +231,15 @@ void GameWorld::ProcessFire(uint32_t shooterID, float yaw, NetworkServer* server
         writer.WriteFloat(rewoundX);
         writer.WriteFloat(rewoundZ);
         writer.WriteAlign();
-        server->Broadcast(writer.GetData(), writer.GetByteLength(), true);
-        players[hitID].isAlive = false;
-        players[hitID].respawnTimer = 2.0f;
-        players[hitID].x = -9999.0f;
 
-        Purpose::EntityDespawn d;
-        d.networkID = hitID;
-        server->Broadcast(&d, sizeof(d), true);
+        for (auto& [id, player] : players) {
+            if (player.isSpectator) {
+                server->SendToPeer(player.peer, writer.GetData(), writer.GetByteLength(), true);
+                server->SendToPeer(it->second.peer, &d, sizeof(d), true);
+            }
+        }
+
+        grid.RemoveEntity(hitID);
     }
 }
 
@@ -207,4 +265,20 @@ bool GameWorld::RayIntersectsCircle(Ray r, float cx, float cz, float rad, float&
     float d2 = (ox * ox + oz * oz) - (dot * dot);
     if (d2 > rad * rad) return false;
     dist = dot; return true;
+}
+
+void GameWorld::SpawnPlayer(Player& p) {
+    p.isAlive = true;
+    p.respawnTimer = 0.0f;
+
+    float range = 45.0f;
+    float rX = (static_cast<float>(rand()) / static_cast<float>(RAND_MAX)) * (2.0f * range) - range;
+    float rZ = (static_cast<float>(rand()) / static_cast<float>(RAND_MAX)) * (2.0f * range) - range;
+
+    p.x = rX;
+    p.y = 0.0f;
+    p.z = rZ;
+    grid.UpdateEntity(p.id, p.x, p.z);
+
+    std::cout << "[Game] Player " << p.id << " spawned at " << p.x << ", " << p.z << std::endl;
 }

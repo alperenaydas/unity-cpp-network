@@ -59,4 +59,10 @@ extern "C" {
         if (!g_Client) return 0;
         return g_Client->CopyLatestBitstream(outBuffer, maxLen);
     }
+
+    EXPORT_API void SendBecomeSpectatorRequest() {
+        if (g_Client) {
+            g_Client->SendBecomeSpectatorRequest();
+        }
+    }
 }

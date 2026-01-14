@@ -20,6 +20,7 @@ public:
     void ServiceNetwork();
 
     void SendInput(uint32_t tick, bool w, bool a, bool s, bool d, bool fire, float yaw);
+    void SendBecomeSpectatorRequest();
 
     bool PopEntityData(Purpose::EntityData& outData);
     uint32_t PopDespawnID();

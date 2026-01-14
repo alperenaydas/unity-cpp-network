@@ -33,6 +33,9 @@ public static class PurposeInterop
 
     [DllImport(DLL_NAME, CallingConvention = CallingConvention.Cdecl)] 
     public static extern void SendMovementInput(uint tick, bool w, bool a, bool s, bool d, bool fire, float yaw);
+    
+    [DllImport(DLL_NAME, CallingConvention = CallingConvention.Cdecl)] 
+    public static extern void SendBecomeSpectatorRequest(uint tick);
 
     [DllImport(DLL_NAME, CallingConvention = CallingConvention.Cdecl)] 
     public static extern int GetLatestBitstream([In, Out] byte[] outBuffer, int maxLen);

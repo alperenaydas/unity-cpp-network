@@ -4,6 +4,7 @@ using UnityEngine;
 public class NetworkManager : MonoBehaviour
 {
     public PurposePlayer PlayerPrefab;
+    public PurposeSpectator SpectatorPrefab;
 
     private Dictionary<uint, PurposePlayer> _remotePlayers = new();
     private PredictionSystem _predictor;
@@ -17,6 +18,10 @@ public class NetworkManager : MonoBehaviour
     public int PlayerCount => _remotePlayers.Count;
     
     private List<DebugHit> _debugHits = new();
+    
+    private float _timeoutDuration = 1.0f;
+    
+    private bool _isSpectatorMode = false;
 
     void Start()
     {
@@ -25,6 +30,7 @@ public class NetworkManager : MonoBehaviour
 
         _connected = PurposeInterop.ConnectToServer();
         if (!_connected) Debug.LogError("Purpose Server Connection Failed.");
+        JoinAsSpectator();
     }
 
     void Update()
@@ -48,7 +54,7 @@ public class NetworkManager : MonoBehaviour
             {
                 uint serverTick = reader.ReadBits(32);
                 uint baselineTick = reader.ReadBits(32);
-                int entityCount = (int)reader.ReadBits(8);
+                int entityCount = (int)reader.ReadBits(10);
 
                 for (int i = 0; i < entityCount; i++)
                 {
@@ -93,10 +99,25 @@ public class NetworkManager : MonoBehaviour
                 _remotePlayers.Remove(despawnID);
             }
         }
+        
+        List<uint> toRemove = new List<uint>();
+        foreach (var kvp in _remotePlayers) {
+            if (Time.time - kvp.Value.LastUpdateTime > _timeoutDuration) {
+                toRemove.Add(kvp.Key);
+            }
+        }
+
+        foreach (uint id in toRemove) {
+            Debug.Log($"[Grid] Entity {id} out of range.");
+            Destroy(_remotePlayers[id].gameObject);
+            _remotePlayers.Remove(id);
+        }
     }
 
     private void ProcessNetworkEntity(uint id, bool moved, int qX, int qZ, float yaw)
     {
+        if (_isSpectatorMode && id == _myID) return;
+        
         if (!_remotePlayers.TryGetValue(id, out var player))
         {
             Vector3 spawnPos = moved ? new Vector3(qX / 100f, 0, qZ / 100f) : Vector3.zero;
@@ -106,7 +127,15 @@ public class NetworkManager : MonoBehaviour
             bool isLocal = (id == _myID);
             instance.InitializePlayer(isLocal, id);
 
-            if (isLocal) PurposeInput.Instance.RegisterLocalPlayer(instance.transform);
+            if (isLocal)
+            {
+                PurposeInput.Instance.RegisterLocalPlayer(instance.transform);
+                if (Camera.main != null)
+                {
+                    var camScript = Camera.main.GetComponent<CameraFollower>();
+                    if (camScript != null) camScript.Target = instance.transform;
+                }
+            }
 
             _remotePlayers.Add(id, instance);
             player = instance;
@@ -125,13 +154,20 @@ public class NetworkManager : MonoBehaviour
                 player.ApplyNetworkUpdate(player.transform.position, Quaternion.Euler(0, yaw, 0));
             }
         }
+
+        player.LastUpdateTime = Time.time;
     }
 
     void FixedUpdate()
     {
         if (!_connected || _myID == 0) return;
-
+        
         _currentTick++;
+        
+        if (_isSpectatorMode) {
+            return; 
+        }
+
         var input = PurposeInput.Instance;
 
         PurposeInterop.SendMovementInput(_currentTick, input.W, input.A, input.S, input.D, input.Fire, input.MouseYaw);
@@ -151,6 +187,20 @@ public class NetworkManager : MonoBehaviour
 
             _predictor.RecordState(_currentTick, predictedPos, input.W, input.A, input.S, input.D);
         }
+    }
+
+    private void JoinAsSpectator()
+    {
+        _isSpectatorMode = true;
+        PurposeInterop.SendBecomeSpectatorRequest(_currentTick);
+        
+        if (_remotePlayers.TryGetValue(_myID, out var myPlayer)) {
+            Destroy(myPlayer.gameObject);
+            _remotePlayers.Remove(_myID);
+        }
+        
+        Instantiate(SpectatorPrefab, new Vector3(0, 20f, 0), Quaternion.identity);
+        Debug.Log("<color=yellow>[Spectator]</color> Mode Enabled. Use WASD + Shift to fly.");
     }
 
     private void OnDestroy()

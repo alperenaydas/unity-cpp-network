@@ -3,6 +3,8 @@
 #include <iostream>
 #include <algorithm>
 
+#include "BitStream.h"
+
 NetworkClient::NetworkClient() {
     enet_initialize();
 }
@@ -191,6 +193,21 @@ void NetworkClient::SendInput(uint32_t tick, bool w, bool a, bool s, bool d, boo
 
     ENetPacket* packet = enet_packet_create(&input, sizeof(input), ENET_PACKET_FLAG_UNRELIABLE_FRAGMENT);
     enet_peer_send(serverPeer, Purpose::CHANNEL_UNRELIABLE, packet);
+}
+
+void NetworkClient::SendBecomeSpectatorRequest() {
+    if (!serverPeer) return;
+    BitWriter writer(2);
+    writer.WriteBits(Purpose::PACKET_CLIENT_SPECTATOR & 0xFF, 8);
+    writer.WriteBits((Purpose::PACKET_CLIENT_SPECTATOR >> 8) & 0xFF, 8);
+
+    ENetPacket* packet = enet_packet_create(
+        writer.GetData(),
+        writer.GetByteLength(),
+        ENET_PACKET_FLAG_RELIABLE
+    );
+
+    enet_peer_send(serverPeer, Purpose::CHANNEL_RELIABLE, packet);
 }
 
 int NetworkClient::CopyLatestBitstream(uint8_t* outBuffer, int maxLen) {

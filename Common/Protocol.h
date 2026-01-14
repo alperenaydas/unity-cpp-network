@@ -20,7 +20,8 @@ namespace Purpose {
         PACKET_ENTITY_DESPAWN = 3,
         PACKET_CLIENT_INPUT = 4,
         PACKET_CLIENT_ACK = 5,
-        PACKET_DEBUG_HIT = 6
+        PACKET_DEBUG_HIT = 6,
+        PACKET_CLIENT_SPECTATOR = 7
     };
 
     struct NetworkMetrics {
@@ -67,6 +68,11 @@ namespace Purpose {
     struct EntityDespawn {
         uint16_t type = PACKET_ENTITY_DESPAWN;
         uint32_t networkID;
+    };
+
+    struct ClientRequestToBeSpectator {
+        uint16_t type = PACKET_CLIENT_SPECTATOR;
+        uint32_t tick;
     };
 #pragma pack(pop)
 }

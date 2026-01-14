@@ -4,6 +4,7 @@
 #include <enet/enet.h>
 
 #include "Protocol.h"
+#include "SpatialGrid.h"
 
 class NetworkServer;
 
@@ -34,6 +35,8 @@ struct Player {
     bool isAlive = true;
     float respawnTimer = 0.0f;
 
+    bool isSpectator = false;
+
     void SaveHistory(uint32_t tick) {
         WorldSnapshot snap;
         snap.tick = tick;
@@ -50,7 +53,7 @@ class GameWorld {
 public:
     void OnClientConnect(ENetPeer* peer, NetworkServer* server);
     void OnClientDisconnect(ENetPeer* peer, NetworkServer* server);
-    void OnPacketReceived(ENetPeer* peer, uint16_t type, void* data);
+    void OnPacketReceived(ENetPeer* peer, uint16_t type, void* data, NetworkServer* server);
 
     void UpdatePhysics(float deltaTime, NetworkServer* server);
     void ProcessFire(uint32_t shooterID, float yaw, NetworkServer* server);
@@ -66,4 +69,8 @@ private:
 
     bool RayIntersectsCircle(Ray ray, float cx, float cz, float radius, float& distance);
     bool GetPositionAtTick(const Player& target, double renderTick, float& outX, float& outZ);
+
+    void SpawnPlayer(Player& p);
+
+    SpatialGrid grid;
 };

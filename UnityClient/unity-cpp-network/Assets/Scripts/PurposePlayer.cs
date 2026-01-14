@@ -10,6 +10,8 @@ public class PurposePlayer : MonoBehaviour
     
     [SerializeField] private PurposeController _purposeController;
 
+    public float LastUpdateTime { get; set; }
+
     public void InitializePlayer(bool isLocal, uint id)
     {
         _purposeController.IsLocalPlayer = isLocal;
