@@ -144,12 +144,16 @@ void GameWorld::UpdatePhysics(float deltaTime, NetworkServer* server) {
 void GameWorld::BroadcastWorldState(NetworkServer* server) {
     static std::vector<uint32_t> nearbyEntities;
 
+    // SIS: Split updates into 4 frames (12.5Hz per entity)
+    const int SIS_GROUPS = 4;
+    int sisGroupIndex = currentServerTick % SIS_GROUPS;
+
     for (auto& [recipID, recipient] : players) {
         nearbyEntities.clear();
 
         if (recipient.isSpectator) {
             for (const auto& [id, p] : players) {
-                // if (p.isSpectator || !p.isAlive) continue;
+                if (p.isSpectator) continue;
                 nearbyEntities.push_back(id);
             }
         }
@@ -167,6 +171,11 @@ void GameWorld::BroadcastWorldState(NetworkServer* server) {
         for (uint32_t targetID : nearbyEntities) {
             if (players.find(targetID) == players.end()) continue;
             if (players[targetID].isSpectator) continue;
+
+            if (recipient.isSpectator) {
+                if (targetID % SIS_GROUPS != sisGroupIndex) continue;
+            }
+
             count++;
         }
 
@@ -179,6 +188,10 @@ void GameWorld::BroadcastWorldState(NetworkServer* server) {
 
             Player& target = players[targetID];
             if (target.isSpectator) continue;
+
+            if (recipient.isSpectator) {
+                if (targetID % SIS_GROUPS != sisGroupIndex) continue;
+            }
 
             writer.WriteBits(target.id, 32);
 
@@ -233,40 +246,40 @@ void GameWorld::ProcessFire(uint32_t shooterID, float yaw, NetworkServer* server
     }
 
     if (hitID != 0) {
-        players[hitID].isAlive = false;
-        players[hitID].respawnTimer = 2.0f;
-        players[hitID].x = -9999.0f;
-
-        std::cout << "[Game] Player " << shooterID << " HIT " << hitID << std::endl;
-
-        std::vector<uint32_t> witnesses;
-        grid.GetRelevantEntities(rewoundX, rewoundZ, witnesses);
-
-        Purpose::EntityDespawn d;
-        d.networkID = hitID;
-
-        for (uint32_t witnessID : witnesses) {
-            if (witnessID == hitID) continue;
-            if (players.count(witnessID) && !players[witnessID].isSpectator) {
-                server->SendToPeer(players[witnessID].peer, &d, sizeof(d), true);
-            }
-        }
-
-        BitWriter writer(64);
-        writer.WriteBits(Purpose::PACKET_DEBUG_HIT & 0xFF, 8);
-        writer.WriteBits((Purpose::PACKET_DEBUG_HIT >> 8) & 0xFF, 8);
-        writer.WriteFloat(rewoundX);
-        writer.WriteFloat(rewoundZ);
-        writer.WriteAlign();
-
-        for (auto& [id, player] : players) {
-            if (player.isSpectator) {
-                server->SendToPeer(player.peer, writer.GetData(), writer.GetByteLength(), true);
-                server->SendToPeer(player.peer, &d, sizeof(d), true);
-            }
-        }
-
-        grid.RemoveEntity(hitID);
+        // players[hitID].isAlive = false;
+        // players[hitID].respawnTimer = 2.0f;
+        // players[hitID].x = -9999.0f;
+        //
+        // std::cout << "[Game] Player " << shooterID << " HIT " << hitID << std::endl;
+        //
+        // std::vector<uint32_t> witnesses;
+        // grid.GetRelevantEntities(rewoundX, rewoundZ, witnesses);
+        //
+        // Purpose::EntityDespawn d;
+        // d.networkID = hitID;
+        //
+        // for (uint32_t witnessID : witnesses) {
+        //     if (witnessID == hitID) continue;
+        //     if (players.count(witnessID) && !players[witnessID].isSpectator) {
+        //         server->SendToPeer(players[witnessID].peer, &d, sizeof(d), true);
+        //     }
+        // }
+        //
+        // BitWriter writer(64);
+        // writer.WriteBits(Purpose::PACKET_DEBUG_HIT & 0xFF, 8);
+        // writer.WriteBits((Purpose::PACKET_DEBUG_HIT >> 8) & 0xFF, 8);
+        // writer.WriteFloat(rewoundX);
+        // writer.WriteFloat(rewoundZ);
+        // writer.WriteAlign();
+        //
+        // for (auto& [id, player] : players) {
+        //     if (player.isSpectator) {
+        //         server->SendToPeer(player.peer, writer.GetData(), writer.GetByteLength(), true);
+        //         server->SendToPeer(player.peer, &d, sizeof(d), true);
+        //     }
+        // }
+        //
+        // grid.RemoveEntity(hitID);
     }
 }
 

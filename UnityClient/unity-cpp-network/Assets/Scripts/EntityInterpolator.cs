@@ -12,8 +12,7 @@ public class EntityInterpolator : MonoBehaviour
 
     private List<StateSnapshot> _snapshotBuffer = new List<StateSnapshot>();
     
-    [Header("Settings")]
-    [SerializeField] private float _interpolationDelay = 0.1f;
+    public static float GlobalDelay = 0.05f;
     
     private bool _isLocalPlayer = false;
 
@@ -38,7 +37,7 @@ public class EntityInterpolator : MonoBehaviour
     {
         if (_isLocalPlayer || _snapshotBuffer.Count < 2) return;
 
-        float renderTime = Time.time - _interpolationDelay;
+        float renderTime = Time.time - GlobalDelay;
 
         for (int i = 0; i < _snapshotBuffer.Count - 1; i++)
         {

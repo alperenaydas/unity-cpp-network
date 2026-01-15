@@ -194,6 +194,9 @@ public class NetworkManager : MonoBehaviour
         _isSpectatorMode = true;
         PurposeInterop.SendBecomeSpectatorRequest(_currentTick);
         
+        EntityInterpolator.GlobalDelay = 0.16f; 
+        Debug.Log("[Client] Switched to SIS Interpolation (160ms)");
+        
         if (_remotePlayers.TryGetValue(_myID, out var myPlayer)) {
             Destroy(myPlayer.gameObject);
             _remotePlayers.Remove(_myID);
