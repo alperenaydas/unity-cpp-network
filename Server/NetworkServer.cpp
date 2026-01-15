@@ -68,6 +68,14 @@ void NetworkServer::Broadcast(const void* data, size_t size, bool reliable) {
 void NetworkServer::SendToPeer(ENetPeer* peer, const void* data, size_t size, bool reliable) {
     if (!peer) return;
 
+    if (size > 1300) {
+        static int warningCooldown = 0;
+        if (warningCooldown++ % 100 == 0) {
+            std::cout << "[Network] WARNING: Packet size " << size
+                      << " bytes (Approaching fragmentation limit!)" << std::endl;
+        }
+    }
+
     enet_uint32 flags = reliable ? ENET_PACKET_FLAG_RELIABLE : ENET_PACKET_FLAG_UNRELIABLE_FRAGMENT;
     ENetPacket* packet = enet_packet_create(data, size, flags);
 
