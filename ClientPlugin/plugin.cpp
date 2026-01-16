@@ -1,7 +1,11 @@
 #include "NetworkClient.h"
 #include <memory>
 
-#define EXPORT_API __declspec(dllexport)
+#if defined(_WIN32)
+    #define EXPORT_API __declspec(dllexport) // Windows
+#else
+    #define EXPORT_API __attribute__((visibility("default"))) // Mac & Linux
+#endif
 
 static std::unique_ptr<NetworkClient> g_Client;
 
