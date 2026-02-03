@@ -15,6 +15,11 @@ struct CellHasher {
     }
 };
 
+struct EntityLocation {
+    CellCoord cell;
+    size_t vectorIndex;
+};
+
 class SpatialGrid {
 public:
     static constexpr float CELL_SIZE = 5.0f;
@@ -22,23 +27,43 @@ public:
     void UpdateEntity(uint32_t id, float x, float z) {
         int cx = static_cast<int>(x / CELL_SIZE);
         int cz = static_cast<int>(z / CELL_SIZE);
+        CellCoord newCell = { cx, cz };
 
-        if (entityCells.find(id) != entityCells.end()) {
-            CellCoord old = entityCells[id];
-            if (old.x == cx && old.z == cz) return;
-            RemoveEntity(id, old);
+        auto it = entityLookup.find(id);
+        if (it != entityLookup.end()) {
+            if (it->second.cell == newCell) return;
+            RemoveEntity(id);
         }
 
-        CellCoord newC = { cx, cz };
-        cells[newC].push_back(id);
-        entityCells[id] = newC;
+        std::vector<uint32_t>& vec = cells[newCell];
+        vec.push_back(id);
+
+        entityLookup[id] = { newCell, vec.size() - 1 };
     }
 
     void RemoveEntity(uint32_t id) {
-        if (entityCells.find(id) != entityCells.end()) {
-            RemoveEntity(id, entityCells[id]);
-            entityCells.erase(id);
+        auto it = entityLookup.find(id);
+        if (it == entityLookup.end()) return;
+
+        EntityLocation loc = it->second;
+        std::vector<uint32_t>& vec = cells[loc.cell];
+
+        uint32_t lastID = vec.back();
+        size_t indexToRemove = loc.vectorIndex;
+
+        if (id != lastID) {
+            vec[indexToRemove] = lastID;
+
+            entityLookup[lastID].vectorIndex = indexToRemove;
         }
+
+        vec.pop_back();
+
+        if (vec.empty()) {
+            cells.erase(loc.cell);
+        }
+
+        entityLookup.erase(id);
     }
 
     void GetRelevantEntities(float x, float z, std::vector<uint32_t>& outIDs) {
@@ -48,8 +73,10 @@ public:
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) {
                 CellCoord key = { cx + dx, cz + dz };
-                if (cells.count(key)) {
-                    const auto& list = cells[key];
+
+                auto it = cells.find(key);
+                if (it != cells.end()) {
+                    const auto& list = it->second;
                     outIDs.insert(outIDs.end(), list.begin(), list.end());
                 }
             }
@@ -57,17 +84,6 @@ public:
     }
 
 private:
-    void RemoveEntity(uint32_t id, CellCoord c) {
-        auto& vec = cells[c];
-        for (size_t i = 0; i < vec.size(); i++) {
-            if (vec[i] == id) {
-                vec[i] = vec.back();
-                vec.pop_back();
-                return;
-            }
-        }
-    }
-
     std::unordered_map<CellCoord, std::vector<uint32_t>, CellHasher> cells;
-    std::unordered_map<uint32_t, CellCoord> entityCells;
+    std::unordered_map<uint32_t, EntityLocation> entityLookup;
 };
