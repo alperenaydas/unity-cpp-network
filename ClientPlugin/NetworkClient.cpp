@@ -28,13 +28,20 @@ bool NetworkClient::Connect(const char* ip, uint16_t port) {
     totalBytesSent = 0;
 
     {
-        std::lock_guard<std::mutex> lock(despawnMutex);
+        std::lock_guard lock(despawnMutex);
         despawnQueue.clear();
     }
 
     {
         std::lock_guard lock(bitstreamMutex);
         packetQueue.clear();
+        freePacketPool.clear();
+
+        packetMemory.resize(MAX_PACKET_POOL_SIZE);
+
+        for (int i = 0; i < MAX_PACKET_POOL_SIZE; i++) {
+            freePacketPool.push_back(&packetMemory[i]);
+        }
     }
 
     clientHost = enet_host_create(nullptr, 1, Purpose::CHANNEL_COUNT, 0, 0);
@@ -115,18 +122,30 @@ void NetworkClient::ServiceNetwork() {
                     assignedPlayerID = p->playerID;
                     Log("[Client] Assigned ID received.");
                 }
-                else if (type == Purpose::PACKET_WORLD_STATE) {
-                    packetsReceived++;
+                else if (type == Purpose::PACKET_WORLD_STATE || type == Purpose::PACKET_DEBUG_HIT) {
+                    if (type == Purpose::PACKET_WORLD_STATE) packetsReceived++;
 
                     {
                         std::lock_guard<std::mutex> lock(bitstreamMutex);
-                        packetQueue.emplace_back(
-                            event.packet->data,
-                            event.packet->data + event.packet->dataLength
-                        );
+
+                        if (!freePacketPool.empty()) {
+                            GamePacket* pkt = freePacketPool.back();
+                            freePacketPool.pop_back();
+
+                            size_t copyLen = event.packet->dataLength;
+                            if (copyLen > 1400) copyLen = 1400;
+
+                            memcpy(pkt->data, event.packet->data, copyLen);
+                            pkt->length = copyLen;
+
+                            packetQueue.push_back(pkt);
+                        }
+                        else {
+                            Log("[Client] WARNING: Packet Pool Exhausted! Dropping packet.");
+                        }
                     }
 
-                    if (event.packet->dataLength >= 6) {
+                    if (type == Purpose::PACKET_WORLD_STATE && event.packet->dataLength >= 6) {
                         uint8_t* ptr = event.packet->data + 2;
                         uint32_t receivedTick = (ptr[0] << 24) | (ptr[1] << 16) | (ptr[2] << 8) | ptr[3];
 
@@ -148,15 +167,6 @@ void NetworkClient::ServiceNetwork() {
                     auto* p = reinterpret_cast<Purpose::EntityDespawn*>(event.packet->data);
                     std::lock_guard lock(despawnMutex);
                     despawnQueue.push_back(p->networkID);
-                }
-                else if (type == Purpose::PACKET_DEBUG_HIT) {
-                    {
-                        std::lock_guard lock(bitstreamMutex);
-                        packetQueue.emplace_back(
-                            event.packet->data,
-                            event.packet->data + event.packet->dataLength
-                        );
-                    }
                 }
 
                 enet_packet_destroy(event.packet);
@@ -197,7 +207,10 @@ void NetworkClient::SendInput(uint32_t tick, bool w, bool a, bool s, bool d, boo
 
 void NetworkClient::SendBecomeSpectatorRequest() {
     if (!serverPeer) return;
-    BitWriter writer(2);
+
+    uint8_t buffer[16];
+    BitWriter writer(buffer, 16);
+
     writer.WriteBits(Purpose::PACKET_CLIENT_SPECTATOR & 0xFF, 8);
     writer.WriteBits((Purpose::PACKET_CLIENT_SPECTATOR >> 8) & 0xFF, 8);
 
@@ -215,14 +228,15 @@ int NetworkClient::CopyLatestBitstream(uint8_t* outBuffer, int maxLen) {
 
     if (packetQueue.empty()) return 0;
 
-    const std::vector<uint8_t>& packetData = packetQueue.front();
+    GamePacket* pkt = packetQueue.front();
 
-    int len = static_cast<int>(packetData.size());
+    int len = static_cast<int>(pkt->length);
     if (len > maxLen) len = maxLen;
 
-    memcpy(outBuffer, packetData.data(), len);
+    memcpy(outBuffer, pkt->data, len);
 
     packetQueue.pop_front();
+    freePacketPool.push_back(pkt);
 
     return len;
 }

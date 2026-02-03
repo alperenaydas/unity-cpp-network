@@ -1,15 +1,19 @@
 ﻿#pragma once
-#include <vector>
 #include <cstdint>
 #include <cstring>
-#include <algorithm> // For std::max
+#include <cassert>
+#include <iostream>
 
 class BitWriter {
 public:
-    BitWriter(size_t initialCapacity = 1400) {
-        buffer.resize(initialCapacity, 0);
-        bitPtr = 0;
+    BitWriter(uint8_t* externalBuffer, size_t bufferSize)
+        : buffer(externalBuffer), capacity(bufferSize), bitPtr(0)
+    {
+        std::memset(buffer, 0, capacity);
     }
+
+    BitWriter(const BitWriter&) = delete;
+    BitWriter& operator=(const BitWriter&) = delete;
 
     void WriteBits(uint32_t value, int count) {
         for (int i = 0; i < count; ++i) {
@@ -21,8 +25,9 @@ public:
     void WriteBit(bool value) {
         size_t byteIndex = bitPtr / 8;
 
-        if (byteIndex >= buffer.size()) {
-            buffer.resize(buffer.size() * 2);
+        if (byteIndex >= capacity) {
+            hasOverflowed = true;
+            return;
         }
 
         if (value) {
@@ -45,12 +50,19 @@ public:
         bitPtr = (bitPtr + 7) & ~7;
     }
 
-    const uint8_t* GetData() const { return buffer.data(); }
+    const uint8_t* GetData() const { return buffer; }
+
     size_t GetByteLength() const { return (bitPtr + 7) / 8; }
 
+    size_t GetBitsWritten() const { return bitPtr; }
+
+    bool IsValid() const { return !hasOverflowed; }
+
 private:
-    std::vector<uint8_t> buffer;
+    uint8_t* buffer;
+    size_t capacity;
     size_t bitPtr;
+    bool hasOverflowed = false;
 };
 
 class BitReader {

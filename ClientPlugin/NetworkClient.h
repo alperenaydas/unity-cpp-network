@@ -10,6 +10,11 @@
 
 using LogCallback = void(*)(const char*);
 
+struct GamePacket {
+    uint8_t data[1400];
+    size_t length;
+};
+
 class NetworkClient {
 public:
     NetworkClient();
@@ -61,7 +66,9 @@ private:
     uint32_t packetsReceived = 0;
     std::atomic<uint32_t> manualPacketLoss{ 0 };
 
-    // Bitstream Storage
-    std::deque<std::vector<uint8_t>> packetQueue;
+    static const int MAX_PACKET_POOL_SIZE = 256;
+    std::vector<GamePacket> packetMemory;
+    std::vector<GamePacket*> freePacketPool;
+    std::deque<GamePacket*> packetQueue;
     std::mutex bitstreamMutex;
 };

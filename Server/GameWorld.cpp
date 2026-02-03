@@ -161,7 +161,8 @@ void GameWorld::BroadcastWorldState(NetworkServer* server) {
             grid.GetRelevantEntities(recipient.x, recipient.z, nearbyEntities);
         }
 
-        BitWriter writer(1400);
+        uint8_t stackBuffer[1400];
+        BitWriter writer(stackBuffer, 1400);
         writer.WriteBits(Purpose::PACKET_WORLD_STATE & 0xFF, 8);
         writer.WriteBits((Purpose::PACKET_WORLD_STATE >> 8) & 0xFF, 8);
         writer.WriteBits(currentServerTick, 32);
@@ -209,6 +210,10 @@ void GameWorld::BroadcastWorldState(NetworkServer* server) {
         }
 
         writer.WriteAlign();
+        if (!writer.IsValid()) {
+            std::cerr << "[Network] CRITICAL: Packet overflow! Dropping update." << std::endl;
+            return;
+        }
         server->SendToPeer(recipient.peer, writer.GetData(), writer.GetByteLength(), false);
     }
 }

@@ -30,7 +30,7 @@ public class NetworkManager : MonoBehaviour
 
         _connected = PurposeInterop.ConnectToServer();
         if (!_connected) Debug.LogError("Purpose Server Connection Failed.");
-        JoinAsSpectator();
+        // JoinAsSpectator();
     }
 
     void Update()
