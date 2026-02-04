@@ -59,12 +59,15 @@ void GameWorld::OnClientDisconnect(ENetPeer* peer, NetworkServer* server) {
 }
 
 void GameWorld::OnPacketReceived(ENetPeer* peer, uint16_t type, void* data, size_t length, NetworkServer* server) {
+    if (!peer->data) return;
+
+    auto id = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(peer->data));
+
     if (length < sizeof(Purpose::ClientInput)) {
         std::cerr << "[Security] Malformed Input Packet from " << id << std::endl;
         return;
     }
 
-    auto id = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(peer->data));
     auto it = players.find(id);
     if (it == players.end()) return;
 
