@@ -53,7 +53,7 @@ class GameWorld {
 public:
     void OnClientConnect(ENetPeer* peer, NetworkServer* server);
     void OnClientDisconnect(ENetPeer* peer, NetworkServer* server);
-    void OnPacketReceived(ENetPeer* peer, uint16_t type, void* data, NetworkServer* server);
+    void OnPacketReceived(ENetPeer* peer, uint16_t type, void* data, size_t length, NetworkServer* server);
 
     void UpdatePhysics(float deltaTime, NetworkServer* server);
     void ProcessFire(uint32_t shooterID, float yaw, NetworkServer* server);

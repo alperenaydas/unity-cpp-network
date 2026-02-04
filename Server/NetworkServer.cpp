@@ -40,7 +40,7 @@ void NetworkServer::PollEvents() {
             case ENET_EVENT_TYPE_RECEIVE:
                 if (onPacket && event.packet->dataLength >= sizeof(uint16_t)) {
                     uint16_t type = *reinterpret_cast<uint16_t*>(event.packet->data);
-                    onPacket(event.peer, type, event.packet->data);
+                    onPacket(event.peer, type, event.packet->data, event.packet->dataLength);
                 }
                 enet_packet_destroy(event.packet);
                 break;

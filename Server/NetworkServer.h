@@ -4,7 +4,7 @@
 #include <string>
 #include "Protocol.h"
 
-using PacketCallback = void(*)(ENetPeer* peer, uint16_t type, void* data);
+using PacketCallback = void(*)(ENetPeer* peer, uint16_t type, void* data, size_t length);
 using ConnectCallback = void(*)(ENetPeer* peer);
 using DisconnectCallback = void(*)(ENetPeer* peer);
 

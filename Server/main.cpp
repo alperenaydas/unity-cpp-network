@@ -27,7 +27,7 @@ void OnDisconnect(ENetPeer* peer) {
 }
 
 void OnPacket(ENetPeer* peer, const uint16_t type, void* data) {
-    if (g_World) g_World->OnPacketReceived(peer, type, data, g_Server);
+    if (g_World) g_World->OnPacketReceived(peer, type, data, length, g_Server);
 }
 
 int main() {

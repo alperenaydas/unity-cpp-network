@@ -1,8 +1,8 @@
 ﻿#pragma once
 #include <cstdint>
 #include <cstring>
-#include <cassert>
-#include <iostream>
+#include <vector>
+#include <string>
 
 class BitWriter {
 public:
@@ -12,9 +12,6 @@ public:
         std::memset(buffer, 0, capacity);
     }
 
-    BitWriter(const BitWriter&) = delete;
-    BitWriter& operator=(const BitWriter&) = delete;
-
     void WriteBits(uint32_t value, int count) {
         for (int i = 0; i < count; ++i) {
             bool bit = (value >> (count - 1 - i)) & 1;
@@ -23,8 +20,9 @@ public:
     }
 
     void WriteBit(bool value) {
-        size_t byteIndex = bitPtr / 8;
+        if (hasOverflowed) return;
 
+        size_t byteIndex = bitPtr / 8;
         if (byteIndex >= capacity) {
             hasOverflowed = true;
             return;
@@ -46,16 +44,19 @@ public:
         WriteBits(temp, 32);
     }
 
+    void WriteBytes(const uint8_t* data, size_t size) {
+        WriteAlign();
+        for(size_t i=0; i<size; i++) {
+            WriteBits(data[i], 8);
+        }
+    }
+
     void WriteAlign() {
         bitPtr = (bitPtr + 7) & ~7;
     }
 
     const uint8_t* GetData() const { return buffer; }
-
     size_t GetByteLength() const { return (bitPtr + 7) / 8; }
-
-    size_t GetBitsWritten() const { return bitPtr; }
-
     bool IsValid() const { return !hasOverflowed; }
 
 private:
@@ -71,13 +72,18 @@ public:
         : buffer(buffer), size(size), bitPtr(0) {}
 
     bool ReadBit() {
-        if (bitPtr >= size * 8) return false;
+        if (bitPtr >= size * 8) {
+            hasOverflowed = true;
+            return false;
+        }
         bool value = (buffer[bitPtr / 8] & (1 << (7 - (bitPtr % 8)))) != 0;
         bitPtr++;
         return value;
     }
 
     uint32_t ReadBits(int count) {
+        if (hasOverflowed) return 0;
+
         uint32_t value = 0;
         for (int i = 0; i < count; i++) {
             if (ReadBit()) {
@@ -98,8 +104,11 @@ public:
         return val;
     }
 
+    bool IsValid() const { return !hasOverflowed; }
+
 private:
     const uint8_t* buffer;
     size_t size;
     size_t bitPtr;
+    bool hasOverflowed = false;
 };
