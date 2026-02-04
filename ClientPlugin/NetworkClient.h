@@ -1,12 +1,11 @@
 ﻿#pragma once
 #include <enet/enet.h>
-#include <deque>
-#include <mutex>
 #include <atomic>
 #include <vector>
-#include <algorithm>
+#include <chrono>
 
 #include "Protocol.h"
+#include "LockFreeQueue.h"
 
 using LogCallback = void(*)(const char*);
 
@@ -49,8 +48,7 @@ private:
     std::atomic<int> head{ 0 };
     std::atomic<int> tail{ 0 };
 
-    std::deque<uint32_t> despawnQueue;
-    std::mutex despawnMutex;
+    LockFreeQueue<uint32_t> despawnQueue{ 64 };
 
     // Metrics
     std::atomic<uint64_t> totalBytesReceived{ 0 };
@@ -68,7 +66,6 @@ private:
 
     static const int MAX_PACKET_POOL_SIZE = 256;
     std::vector<GamePacket> packetMemory;
-    std::vector<GamePacket*> freePacketPool;
-    std::deque<GamePacket*> packetQueue;
-    std::mutex bitstreamMutex;
+    LockFreeQueue<GamePacket*> packetQueue{ 512 };
+    LockFreeQueue<GamePacket*> freePacketPool{ 512 };
 };

@@ -27,21 +27,19 @@ bool NetworkClient::Connect(const char* ip, uint16_t port) {
     totalBytesReceived = 0;
     totalBytesSent = 0;
 
-    {
-        std::lock_guard lock(despawnMutex);
-        despawnQueue.clear();
+    uint32_t tempID;
+    while (despawnQueue.Pop(tempID));
+
+    if (packetMemory.empty()) {
+        packetMemory.resize(MAX_PACKET_POOL_SIZE);
     }
 
-    {
-        std::lock_guard lock(bitstreamMutex);
-        packetQueue.clear();
-        freePacketPool.clear();
+    GamePacket* temp = nullptr;
+    while (packetQueue.Pop(temp));
+    while (freePacketPool.Pop(temp));
 
-        packetMemory.resize(MAX_PACKET_POOL_SIZE);
-
-        for (int i = 0; i < MAX_PACKET_POOL_SIZE; i++) {
-            freePacketPool.push_back(&packetMemory[i]);
-        }
+    for (int i = 0; i < MAX_PACKET_POOL_SIZE; i++) {
+        freePacketPool.Push(&packetMemory[i]);
     }
 
     clientHost = enet_host_create(nullptr, 1, Purpose::CHANNEL_COUNT, 0, 0);
@@ -125,25 +123,23 @@ void NetworkClient::ServiceNetwork() {
                 else if (type == Purpose::PACKET_WORLD_STATE || type == Purpose::PACKET_DEBUG_HIT) {
                     if (type == Purpose::PACKET_WORLD_STATE) packetsReceived++;
 
-                    {
-                        std::lock_guard<std::mutex> lock(bitstreamMutex);
+                    GamePacket* pkt = nullptr;
 
-                        if (!freePacketPool.empty()) {
-                            GamePacket* pkt = freePacketPool.back();
-                            freePacketPool.pop_back();
+                    if (freePacketPool.Pop(pkt)) {
+                        size_t copyLen = event.packet->dataLength;
+                        if (copyLen > 1400) copyLen = 1400;
 
-                            size_t copyLen = event.packet->dataLength;
-                            if (copyLen > 1400) copyLen = 1400;
+                        memcpy(pkt->data, event.packet->data, copyLen);
+                        pkt->length = copyLen;
 
-                            memcpy(pkt->data, event.packet->data, copyLen);
-                            pkt->length = copyLen;
-
-                            packetQueue.push_back(pkt);
+                        if (!packetQueue.Push(pkt)) {
+                            freePacketPool.Push(pkt);
+                            Log("[Client] Queue Full! Dropping packet.");
                         }
-                        else {
-                            Log("[Client] WARNING: Packet Pool Exhausted! Dropping packet.");
-                        }
+                    } else {
+                        Log("[Client] Packet Pool Exhausted! Dropping packet.");
                     }
+
 
                     if (type == Purpose::PACKET_WORLD_STATE && event.packet->dataLength >= 6) {
                         uint8_t* ptr = event.packet->data + 2;
@@ -165,8 +161,9 @@ void NetworkClient::ServiceNetwork() {
                 }
                 else if (type == Purpose::PACKET_ENTITY_DESPAWN) {
                     auto* p = reinterpret_cast<Purpose::EntityDespawn*>(event.packet->data);
-                    std::lock_guard lock(despawnMutex);
-                    despawnQueue.push_back(p->networkID);
+                    if (!despawnQueue.Push(p->networkID)) {
+                        Log("[Client] Despawn Queue Full! Event dropped.");
+                    }
                 }
 
                 enet_packet_destroy(event.packet);
@@ -224,21 +221,20 @@ void NetworkClient::SendBecomeSpectatorRequest() {
 }
 
 int NetworkClient::CopyLatestBitstream(uint8_t* outBuffer, int maxLen) {
-    std::lock_guard lock(bitstreamMutex);
+    GamePacket* pkt = nullptr;
 
-    if (packetQueue.empty()) return 0;
+    if (packetQueue.Pop(pkt)) {
 
-    GamePacket* pkt = packetQueue.front();
+        int len = static_cast<int>(pkt->length);
+        if (len > maxLen) len = maxLen;
+        memcpy(outBuffer, pkt->data, len);
 
-    int len = static_cast<int>(pkt->length);
-    if (len > maxLen) len = maxLen;
+        freePacketPool.Push(pkt);
 
-    memcpy(outBuffer, pkt->data, len);
+        return len;
+    }
 
-    packetQueue.pop_front();
-    freePacketPool.push_back(pkt);
-
-    return len;
+    return 0;
 }
 
 bool NetworkClient::PopEntityData(Purpose::EntityData& outData) {
@@ -251,12 +247,11 @@ bool NetworkClient::PopEntityData(Purpose::EntityData& outData) {
 }
 
 uint32_t NetworkClient::PopDespawnID() {
-    std::lock_guard<std::mutex> lock(despawnMutex);
-    if (despawnQueue.empty()) return 0;
-
-    uint32_t id = despawnQueue.front();
-    despawnQueue.pop_front();
-    return id;
+    uint32_t id = 0;
+    if (despawnQueue.Pop(id)) {
+        return id;
+    }
+    return 0;
 }
 
 Purpose::NetworkMetrics NetworkClient::GetMetrics() const {
