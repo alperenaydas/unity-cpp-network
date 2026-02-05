@@ -5,7 +5,7 @@
 #include <chrono>
 
 #include "Protocol.h"
-#include "LockFreeQueue.h"
+#include "SPSCQueue.h"
 
 using LogCallback = void(*)(const char*);
 
@@ -42,7 +42,7 @@ private:
     ENetPeer* serverPeer = nullptr;
     std::atomic<uint32_t> assignedPlayerID{ 0 };
 
-    LockFreeQueue<uint32_t> despawnQueue{ 64 };
+    SPSCQueue<uint32_t> despawnQueue{ 64 };
 
     // Metrics
     std::atomic<uint64_t> totalBytesReceived{ 0 };
@@ -60,6 +60,6 @@ private:
 
     static const int MAX_PACKET_POOL_SIZE = 256;
     std::vector<GamePacket> packetMemory;
-    LockFreeQueue<GamePacket*> packetQueue{ 512 };
-    LockFreeQueue<GamePacket*> freePacketPool{ 512 };
+    SPSCQueue<GamePacket*> packetQueue{ 512 };
+    SPSCQueue<GamePacket*> freePacketPool{ 512 };
 };

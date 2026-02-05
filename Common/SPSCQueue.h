@@ -3,9 +3,9 @@
 #include <atomic>
 
 template <typename T>
-class LockFreeQueue {
+class SPSCQueue {
 public:
-    explicit LockFreeQueue(size_t size = 1024) 
+    explicit SPSCQueue(size_t size = 1024)
         : buffer(size), capacity(size), head(0), tail(0) {}
 
     bool Push(const T& item) {
