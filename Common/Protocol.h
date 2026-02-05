@@ -19,6 +19,9 @@ namespace Purpose {
 
     constexpr float PI = 3.14159265359f;
 
+    constexpr int HARD_CAP_INPUT_QUEUE = 128;
+    constexpr int SOFT_CAP_INPUT_QUEUE = 16;
+
 #pragma pack(push, 1)
 
     enum Channels : uint8_t {

@@ -73,7 +73,14 @@ void GameWorld::OnPacketReceived(ENetPeer* peer, uint16_t type, void* data, size
 
     if (type == Purpose::PACKET_CLIENT_INPUT) {
         auto* in = static_cast<Purpose::ClientInput*>(data);
-        if (in->tick > it->second.lastProcessedTick) it->second.inputQueue.push_back(*in);
+
+        if (it->second.inputQueue.size() >= Purpose::HARD_CAP_INPUT_QUEUE) {
+            return;
+        }
+
+        if (in->tick > it->second.lastProcessedTick) {
+            it->second.inputQueue.push_back(*in);
+        }
     }
     else if (type == Purpose::PACKET_CLIENT_ACK) {
         if (length < sizeof(Purpose::ClientAck)) {
@@ -128,7 +135,11 @@ void GameWorld::UpdatePhysics(float deltaTime, NetworkServer* server) {
             continue;
         }
 
-        while (!p.inputQueue.empty()) {
+        while (p.inputQueue.size() > Purpose::SOFT_CAP_INPUT_QUEUE) {
+            p.inputQueue.pop_front();
+        }
+
+        if (!p.inputQueue.empty()) {
             Purpose::ClientInput in = p.inputQueue.front();
             p.inputQueue.pop_front();
 
