@@ -22,7 +22,7 @@ struct EntityLocation {
 
 class SpatialGrid {
 public:
-    static constexpr float CELL_SIZE = 5.0f;
+    static constexpr float CELL_SIZE = 25.0f;
 
     void UpdateEntity(uint32_t id, float x, float z) {
         int cx = static_cast<int>(x / CELL_SIZE);

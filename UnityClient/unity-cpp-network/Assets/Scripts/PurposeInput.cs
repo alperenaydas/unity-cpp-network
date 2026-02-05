@@ -12,6 +12,11 @@ public class PurposeInput : MonoBehaviour
     public float MouseYaw { get; private set; }
 
     private Transform _localPlayerTransform;
+    
+    private bool _inDeadzone = false;
+    
+    private const float DIST_ENTER_DEADZONE = 0.5f;
+    private const float DIST_EXIT_DEADZONE = 2.0f;
 
     private void Awake() => Instance = this;
 
@@ -34,7 +39,20 @@ public class PurposeInput : MonoBehaviour
             Vector3 direction = hitPoint - _localPlayerTransform.position;
             direction.y = 0; 
             
-            if (direction.sqrMagnitude > 0.01f)
+            float distSq = direction.sqrMagnitude;
+
+            if (_inDeadzone) {
+                if (distSq > DIST_EXIT_DEADZONE) {
+                    _inDeadzone = false;
+                }
+            }
+            else {
+                if (distSq < DIST_ENTER_DEADZONE) {
+                    _inDeadzone = true;
+                }
+            }
+
+            if (!_inDeadzone)
             {
                 MouseYaw = Quaternion.LookRotation(direction).eulerAngles.y;
             }

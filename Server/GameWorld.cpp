@@ -63,15 +63,17 @@ void GameWorld::OnPacketReceived(ENetPeer* peer, uint16_t type, void* data, size
 
     auto id = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(peer->data));
 
-    if (length < sizeof(Purpose::ClientInput)) {
-        std::cerr << "[Security] Malformed Input Packet from " << id << std::endl;
-        return;
-    }
+
 
     auto it = players.find(id);
     if (it == players.end()) return;
 
     if (type == Purpose::PACKET_CLIENT_INPUT) {
+        if (length < sizeof(Purpose::ClientInput)) {
+            std::cerr << "[Security] Malformed Input Packet from " << id << std::endl;
+            return;
+        }
+
         auto* in = static_cast<Purpose::ClientInput*>(data);
 
         if (it->second.inputQueue.size() >= Purpose::HARD_CAP_INPUT_QUEUE) {
@@ -180,17 +182,11 @@ void GameWorld::BroadcastWorldState(NetworkServer* server) {
             grid.GetRelevantEntities(recipient.x, recipient.z, nearbyEntities);
         }
 
-        uint8_t stackBuffer[Purpose::MTU_SIZE];
-        BitWriter writer(stackBuffer, Purpose::MTU_SIZE);
-        writer.WriteBits(Purpose::PACKET_WORLD_STATE & 0xFF, 8);
-        writer.WriteBits((Purpose::PACKET_WORLD_STATE >> 8) & 0xFF, 8);
-        writer.WriteBits(currentServerTick, 32);
-        writer.WriteBits(recipient.lastAckedTick, 32);
-
         uint32_t count = 0;
         for (uint32_t targetID : nearbyEntities) {
             if (players.find(targetID) == players.end()) continue;
-            if (players[targetID].isSpectator) continue;
+            Player& target = players[targetID];
+            if (target.isSpectator) continue;
 
             if (recipient.isSpectator) {
                 if (targetID % Purpose::SIS_GROUPS != sisGroupIndex) continue;
@@ -199,33 +195,67 @@ void GameWorld::BroadcastWorldState(NetworkServer* server) {
             count++;
         }
 
-        writer.WriteBits(count, 10);
+        uint8_t stackBuffer[Purpose::MTU_SIZE];
+        BitWriter writer(stackBuffer, Purpose::MTU_SIZE);
 
-        WorldSnapshot* baseline = GetSnapshot(recipient, recipient.lastAckedTick);
+        writer.WriteBits(Purpose::PACKET_WORLD_STATE & 0xFF, 8);
+        writer.WriteBits((Purpose::PACKET_WORLD_STATE >> 8) & 0xFF, 8);
+        writer.WriteBits(currentServerTick, 32);
+        writer.WriteBits(recipient.lastAckedTick, 32);
+
+        writer.WriteBits(count, 10);
 
         for (uint32_t targetID : nearbyEntities) {
             if (players.find(targetID) == players.end()) continue;
-
             Player& target = players[targetID];
             if (target.isSpectator) continue;
-
-            if (recipient.isSpectator) {
-                if (targetID % Purpose::SIS_GROUPS != sisGroupIndex) continue;
-            }
+            if (recipient.isSpectator && targetID % Purpose::SIS_GROUPS != sisGroupIndex) continue;
 
             writer.WriteBits(target.id, 32);
 
             int32_t curQX = static_cast<int32_t>(target.x * Purpose::QUANT_RES);
             int32_t curQZ = static_cast<int32_t>(target.z * Purpose::QUANT_RES);
 
-            bool moved = true;
+            WorldSnapshot* targetBase = GetSnapshot(target, recipient.lastAckedTick);
+            WorldSnapshot* recipBase = GetSnapshot(recipient, recipient.lastAckedTick);
 
-            writer.WriteBit(moved);
-            if (moved) {
+            bool posChanged = true;
+            bool rotChanged = true;
+
+            if (targetBase && recipBase) {
+                float oldRecipX = static_cast<float>(recipBase->qx) / Purpose::QUANT_RES;
+                float oldRecipZ = static_cast<float>(recipBase->qz) / Purpose::QUANT_RES;
+                float oldTargetX = static_cast<float>(targetBase->qx) / Purpose::QUANT_RES;
+                float oldTargetZ = static_cast<float>(targetBase->qz) / Purpose::QUANT_RES;
+
+                float dx = oldRecipX - oldTargetX;
+                float dz = oldRecipZ - oldTargetZ;
+                float oldDistSq = (dx*dx) + (dz*dz);
+
+                float viewRangeSq = Purpose::SPAWN_RANGE * Purpose::SPAWN_RANGE;
+
+                bool wasVisible = oldDistSq < viewRangeSq;
+
+                if (wasVisible) {
+                    if (curQX == targetBase->qx && curQZ == targetBase->qz) {
+                        posChanged = false;
+                    }
+                    if (std::abs(target.yaw - targetBase->yaw) < 0.1f) {
+                        rotChanged = false;
+                    }
+                }
+            }
+
+            writer.WriteBit(posChanged);
+            if (posChanged) {
                 writer.WriteInt(curQX, 32);
                 writer.WriteInt(curQZ, 32);
             }
-            writer.WriteFloat(target.yaw);
+
+            writer.WriteBit(rotChanged);
+            if (rotChanged) {
+                writer.WriteFloat(target.yaw);
+            }
         }
 
         writer.WriteAlign();

@@ -23,9 +23,6 @@ public static class PurposeInterop
     public static extern uint GetAssignedPlayerID();
 
     [DllImport(DLL_NAME, CallingConvention = CallingConvention.Cdecl)] 
-    public static extern bool GetNextEntityUpdate(out EntityData outData);
-
-    [DllImport(DLL_NAME, CallingConvention = CallingConvention.Cdecl)] 
     public static extern uint GetNextDespawnID();
 
     [DllImport(DLL_NAME, CallingConvention = CallingConvention.Cdecl)] 
@@ -35,19 +32,10 @@ public static class PurposeInterop
     public static extern void SendMovementInput(uint tick, bool w, bool a, bool s, bool d, bool fire, float yaw);
     
     [DllImport(DLL_NAME, CallingConvention = CallingConvention.Cdecl)] 
-    public static extern void SendBecomeSpectatorRequest(uint tick);
+    public static extern void SendBecomeSpectatorRequest();
 
     [DllImport(DLL_NAME, CallingConvention = CallingConvention.Cdecl)] 
     public static extern int GetLatestBitstream([In, Out] byte[] outBuffer, int maxLen);
-}
-
-[StructLayout(LayoutKind.Sequential, Pack = 1)]
-public struct EntityData
-{
-    public uint NetworkID;
-    public uint LastProcessedTick;
-    public int qX, qY, qZ;
-    public float RotationYaw;
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]

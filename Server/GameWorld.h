@@ -10,7 +10,8 @@ class NetworkServer;
 
 struct WorldSnapshot {
     uint32_t tick;
-    int32_t qx, qy, qz;
+    int32_t qx, qz;
+    float yaw;
 };
 
 struct Ray {
@@ -41,9 +42,8 @@ struct Player {
         WorldSnapshot snap;
         snap.tick = tick;
         snap.qx = static_cast<int32_t>(x * Purpose::QUANT_RES);
-        snap.qy = static_cast<int32_t>(y * Purpose::QUANT_RES);
         snap.qz = static_cast<int32_t>(z * Purpose::QUANT_RES);
-
+        snap.yaw = static_cast<float>(yaw);
         positionHistory.push_front(snap);
         if (positionHistory.size() > 128) positionHistory.pop_back();
     }

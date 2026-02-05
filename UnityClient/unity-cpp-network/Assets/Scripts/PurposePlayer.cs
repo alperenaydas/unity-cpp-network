@@ -6,8 +6,6 @@ public class PurposePlayer : MonoBehaviour
     [SerializeField] private MeshRenderer _playerMesh;
     [SerializeField] private Material _playerMaterial;
     [SerializeField] private Material _enemyMaterial;
-    
-    
     [SerializeField] private PurposeController _purposeController;
 
     public float LastUpdateTime { get; set; }
@@ -20,8 +18,8 @@ public class PurposePlayer : MonoBehaviour
         name = isLocal ? "MyPlayer" : $"RemotePlayer_{id}";
     }
     
-    public void ApplyNetworkUpdate(Vector3 pos, Quaternion rot)
+    public void ApplyNetworkUpdate(uint serverTick, Vector3? pos, Quaternion? rot)
     {
-        _interpolator.PushState(pos, rot);
+        _interpolator.PushState(serverTick, pos, rot);
     }
 }
