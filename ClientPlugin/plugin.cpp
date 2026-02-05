@@ -36,13 +36,6 @@ extern "C" {
         return g_Client ? g_Client->GetAssignedID() : 0;
     }
 
-    EXPORT_API bool GetNextEntityUpdate(Purpose::EntityData* outData) {
-        if (g_Client && outData) {
-            return g_Client->PopEntityData(*outData);
-        }
-        return false;
-    }
-
     EXPORT_API uint32_t GetNextDespawnID() {
         return g_Client ? g_Client->PopDespawnID() : 0;
     }

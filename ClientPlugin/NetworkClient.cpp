@@ -22,8 +22,6 @@ bool NetworkClient::Connect(const char* ip, uint16_t port) {
     if (clientHost) Disconnect();
 
     assignedPlayerID = 0;
-    head = 0;
-    tail = 0;
     totalBytesReceived = 0;
     totalBytesSent = 0;
 
@@ -127,7 +125,7 @@ void NetworkClient::ServiceNetwork() {
 
                     if (freePacketPool.Pop(pkt)) {
                         size_t copyLen = event.packet->dataLength;
-                        if (copyLen > 1400) copyLen = 1400;
+                        if (copyLen > Purpose::MTU_SIZE) copyLen = Purpose::MTU_SIZE;
 
                         memcpy(pkt->data, event.packet->data, copyLen);
                         pkt->length = copyLen;
@@ -235,15 +233,6 @@ int NetworkClient::CopyLatestBitstream(uint8_t* outBuffer, int maxLen) {
     }
 
     return 0;
-}
-
-bool NetworkClient::PopEntityData(Purpose::EntityData& outData) {
-    int currentTail = tail.load();
-    if (currentTail == head.load()) return false;
-
-    outData = entityBuffer[currentTail];
-    tail.store((currentTail + 1) % ENTITY_BUFFER_SIZE);
-    return true;
 }
 
 uint32_t NetworkClient::PopDespawnID() {

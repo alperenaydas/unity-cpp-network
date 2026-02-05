@@ -17,7 +17,7 @@ bool NetworkServer::Initialize() {
     address.host = ENET_HOST_ANY;
     address.port = port;
 
-    serverHost = enet_host_create(&address, 1024, Purpose::CHANNEL_COUNT, 0, 0);
+    serverHost = enet_host_create(&address, Purpose::MAX_CLIENTS, Purpose::CHANNEL_COUNT, 0, 0);
     if (!serverHost) {
         std::cerr << "[Network] Failed to create ENet host." << std::endl;
         return false;
@@ -68,7 +68,7 @@ void NetworkServer::Broadcast(const void* data, size_t size, bool reliable) {
 void NetworkServer::SendToPeer(ENetPeer* peer, const void* data, size_t size, bool reliable) {
     if (!peer) return;
 
-    if (size > 1300) {
+    if (size > Purpose::MTU_SIZE - 100) {
         static int warningCooldown = 0;
         if (warningCooldown++ % 100 == 0) {
             std::cout << "[Network] WARNING: Packet size " << size

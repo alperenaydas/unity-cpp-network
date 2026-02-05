@@ -26,7 +26,7 @@ void OnDisconnect(ENetPeer* peer) {
     if (g_World && g_Server) g_World->OnClientDisconnect(peer, g_Server);
 }
 
-void OnPacket(ENetPeer* peer, const uint16_t type, void* data) {
+void OnPacket(ENetPeer* peer, const uint16_t type, void* data, size_t length) {
     if (g_World) g_World->OnPacketReceived(peer, type, data, length, g_Server);
 }
 
@@ -52,9 +52,6 @@ int main() {
         return -1;
     }
 
-    constexpr float TARGET_TICK_RATE = 50.0f; // 20ms
-    constexpr float DELTA_TIME = 1.0f / TARGET_TICK_RATE;
-
     auto currentTime = std::chrono::high_resolution_clock::now();
     double accumulator = 0.0;
 
@@ -72,9 +69,9 @@ int main() {
         server.PollEvents();
 
         bool physicsUpdated = false;
-        while (accumulator >= DELTA_TIME) {
-            world.UpdatePhysics(DELTA_TIME, g_Server);
-            accumulator -= DELTA_TIME;
+        while (accumulator >= Purpose::TICK_DELTA) {
+            world.UpdatePhysics(Purpose::TICK_DELTA, g_Server);
+            accumulator -= Purpose::TICK_DELTA;
             physicsUpdated = true;
         }
 
@@ -82,7 +79,7 @@ int main() {
             world.BroadcastWorldState(&server);
         }
 
-        double timeUntilNextTick = DELTA_TIME - accumulator;
+        double timeUntilNextTick = Purpose::TICK_DELTA - accumulator;
         if (timeUntilNextTick > 0.002) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }

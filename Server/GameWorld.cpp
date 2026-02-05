@@ -138,8 +138,8 @@ void GameWorld::UpdatePhysics(float deltaTime, NetworkServer* server) {
 
             float mag = sqrtf(mx * mx + mz * mz);
             if (mag > 0) {
-                p.x += (mx / mag) * MOVE_SPEED * deltaTime;
-                p.z += (mz / mag) * MOVE_SPEED * deltaTime;
+                p.x += (mx / mag) * Purpose::MOVE_SPEED * deltaTime;
+                p.z += (mz / mag) * Purpose::MOVE_SPEED * deltaTime;
             }
             p.yaw = in.mouseYaw;
             p.lastProcessedTick = in.tick;
@@ -154,9 +154,7 @@ void GameWorld::UpdatePhysics(float deltaTime, NetworkServer* server) {
 void GameWorld::BroadcastWorldState(NetworkServer* server) {
     static std::vector<uint32_t> nearbyEntities;
 
-    // SIS: Split updates into 4 frames (12.5Hz per entity)
-    const int SIS_GROUPS = 4;
-    int sisGroupIndex = currentServerTick % SIS_GROUPS;
+    int sisGroupIndex = currentServerTick % Purpose::SIS_GROUPS;
 
     for (auto& [recipID, recipient] : players) {
         nearbyEntities.clear();
@@ -171,8 +169,8 @@ void GameWorld::BroadcastWorldState(NetworkServer* server) {
             grid.GetRelevantEntities(recipient.x, recipient.z, nearbyEntities);
         }
 
-        uint8_t stackBuffer[1400];
-        BitWriter writer(stackBuffer, 1400);
+        uint8_t stackBuffer[Purpose::MTU_SIZE];
+        BitWriter writer(stackBuffer, Purpose::MTU_SIZE);
         writer.WriteBits(Purpose::PACKET_WORLD_STATE & 0xFF, 8);
         writer.WriteBits((Purpose::PACKET_WORLD_STATE >> 8) & 0xFF, 8);
         writer.WriteBits(currentServerTick, 32);
@@ -184,7 +182,7 @@ void GameWorld::BroadcastWorldState(NetworkServer* server) {
             if (players[targetID].isSpectator) continue;
 
             if (recipient.isSpectator) {
-                if (targetID % SIS_GROUPS != sisGroupIndex) continue;
+                if (targetID % Purpose::SIS_GROUPS != sisGroupIndex) continue;
             }
 
             count++;
@@ -201,7 +199,7 @@ void GameWorld::BroadcastWorldState(NetworkServer* server) {
             if (target.isSpectator) continue;
 
             if (recipient.isSpectator) {
-                if (targetID % SIS_GROUPS != sisGroupIndex) continue;
+                if (targetID % Purpose::SIS_GROUPS != sisGroupIndex) continue;
             }
 
             writer.WriteBits(target.id, 32);
@@ -234,11 +232,11 @@ void GameWorld::ProcessFire(uint32_t shooterID, float yaw, NetworkServer* server
 
     Player& shooter = it->second;
 
-    float rttTicks = (static_cast<float>(shooter.peer->roundTripTime) / 1000.0f) * 50.0f;
+    float rttTicks = (static_cast<float>(shooter.peer->roundTripTime) / 1000.0f) * Purpose::TICK_RATE;
     double renderTick = static_cast<double>(currentServerTick) - (5.0 + (rttTicks / 2.0));
     if (renderTick < 0) renderTick = 0;
 
-    float rad = yaw * (3.14159f / 180.0f);
+    float rad = yaw * (Purpose::PI / 180.0f);
     Ray ray = { shooter.x, shooter.z, sinf(rad), cosf(rad) };
 
     uint32_t hitID = 0;
@@ -251,7 +249,7 @@ void GameWorld::ProcessFire(uint32_t shooterID, float yaw, NetworkServer* server
         float tx, tz;
         if (GetPositionAtTick(target, renderTick, tx, tz)) {
             float d;
-            if (RayIntersectsCircle(ray, tx, tz, 0.5f, d) && d < closest) {
+            if (RayIntersectsCircle(ray, tx, tz, Purpose::PLAYER_RADIUS, d) && d < closest) {
                 closest = d;
                 hitID = id;
                 rewoundX = tx;
@@ -326,7 +324,7 @@ void GameWorld::SpawnPlayer(Player& p) {
     p.isAlive = true;
     p.respawnTimer = 0.0f;
 
-    float range = 45.0f;
+    float range = Purpose::SPAWN_RANGE;
     float rX = (static_cast<float>(rand()) / static_cast<float>(RAND_MAX)) * (2.0f * range) - range;
     float rZ = (static_cast<float>(rand()) / static_cast<float>(RAND_MAX)) * (2.0f * range) - range;
 

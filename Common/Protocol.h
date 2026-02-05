@@ -2,11 +2,24 @@
 #include <cstdint>
 
 namespace Purpose {
-#pragma pack(push, 1)
     constexpr uint16_t SERVER_PORT = 8888;
-    inline const char* SERVER_IP = "127.0.0.1";
-    constexpr int MAX_ENTITIES_PER_PACKET = 128;
-    static constexpr float QUANT_RES = 100.0f;
+    inline const char *SERVER_IP = "127.0.0.1";
+    constexpr int MTU_SIZE = 1400;
+    constexpr int MAX_CLIENTS = 1024;
+
+    constexpr float TICK_RATE = 50.0f;
+    constexpr float TICK_DELTA = 1.0f / TICK_RATE;
+
+    constexpr float SPAWN_RANGE = 45.0f;
+    constexpr float MOVE_SPEED = 10.0f;
+    constexpr float PLAYER_RADIUS = 0.5f;
+    constexpr float QUANT_RES = 100.0f;
+
+    constexpr int SIS_GROUPS = 4;
+
+    constexpr float PI = 3.14159265359f;
+
+#pragma pack(push, 1)
 
     enum Channels : uint8_t {
         CHANNEL_RELIABLE = 0,
@@ -45,6 +58,8 @@ namespace Purpose {
         int32_t qX, qY, qZ;
         float rotationYaw;
     };
+
+    constexpr int MAX_ENTITIES_PER_PACKET = 128;
 
     struct WorldStatePacket {
         uint16_t type = PACKET_WORLD_STATE;

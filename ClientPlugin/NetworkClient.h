@@ -10,7 +10,7 @@
 using LogCallback = void(*)(const char*);
 
 struct GamePacket {
-    uint8_t data[1400];
+    uint8_t data[Purpose::MTU_SIZE];
     size_t length;
 };
 
@@ -26,7 +26,6 @@ public:
     void SendInput(uint32_t tick, bool w, bool a, bool s, bool d, bool fire, float yaw);
     void SendBecomeSpectatorRequest();
 
-    bool PopEntityData(Purpose::EntityData& outData);
     uint32_t PopDespawnID();
 
     int CopyLatestBitstream(uint8_t* outBuffer, int maxLen);
@@ -42,11 +41,6 @@ private:
     ENetHost* clientHost = nullptr;
     ENetPeer* serverPeer = nullptr;
     std::atomic<uint32_t> assignedPlayerID{ 0 };
-
-    static const int ENTITY_BUFFER_SIZE = 4096;
-    Purpose::EntityData entityBuffer[ENTITY_BUFFER_SIZE];
-    std::atomic<int> head{ 0 };
-    std::atomic<int> tail{ 0 };
 
     LockFreeQueue<uint32_t> despawnQueue{ 64 };
 
