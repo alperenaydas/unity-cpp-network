@@ -49,6 +49,11 @@ struct Player {
     }
 };
 
+struct EntityDist {
+    uint32_t id;
+    float distSq;
+};
+
 class GameWorld {
 public:
     void OnClientConnect(ENetPeer* peer, NetworkServer* server);

@@ -123,7 +123,18 @@ public class NetworkManager : MonoBehaviour
             {
                 PurposeInput.Instance.RegisterLocalPlayer(player.transform);
                 var cam = Camera.main?.GetComponent<CameraFollower>();
-                if (cam) cam.Target = player.transform;
+                if (cam) 
+                {
+                    var smoother = player.GetComponent<LocalSmoother>();
+                    if (smoother != null && smoother.VisualRoot != null)
+                    {
+                        cam.Target = smoother.VisualRoot;
+                    }
+                    else
+                    {
+                        cam.Target = player.transform;
+                    }
+                }
             }
 
             _remotePlayers.Add(id, player);
@@ -151,6 +162,16 @@ public class NetworkManager : MonoBehaviour
         else
         {
             player.ApplyNetworkUpdate(serverTick, newPos, newRot);
+            
+            if (posChanged && newPos.HasValue)
+            {
+                float dist = Vector3.Distance(player.transform.position, newPos.Value);
+                if (dist > 5.0f) 
+                {
+                    player.transform.position = newPos.Value;
+                    player.ResetInterpolation(); 
+                }
+            }
         }
 
         player.LastUpdateTime = Time.time;

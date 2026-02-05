@@ -12,7 +12,7 @@ public class PredictionSystem
 
     private readonly List<HistoryState> _history = new();
     private const float TOLERANCE = 0.05f;
-    private const float MOVE_SPEED = 5.0f;
+    private const float MOVE_SPEED = 10.0f;
 
     private readonly Transform _targetTransform;
 
@@ -65,7 +65,6 @@ public class PredictionSystem
 
         if (moveDir.sqrMagnitude > 0)
         {
-            // Normalizing prevents the "Diagonal Speed Hack"
             return start + (moveDir.normalized * (MOVE_SPEED * dt));
         }
         

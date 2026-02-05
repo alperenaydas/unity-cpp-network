@@ -1,4 +1,7 @@
 ﻿#include "GameWorld.h"
+
+#include <algorithm>
+
 #include "NetworkServer.h"
 #include "BitStream.h"
 #include <cmath>
@@ -166,11 +169,17 @@ void GameWorld::UpdatePhysics(float deltaTime, NetworkServer* server) {
 
 void GameWorld::BroadcastWorldState(NetworkServer* server) {
     static std::vector<uint32_t> nearbyEntities;
+    static std::vector<EntityDist> candidates;
+    static std::vector<uint32_t> entitiesToSend;
+
+    const size_t MAX_ENTITIES_PER_PACKET_SAFE = 80;
 
     int sisGroupIndex = currentServerTick % Purpose::SIS_GROUPS;
 
     for (auto& [recipID, recipient] : players) {
         nearbyEntities.clear();
+        candidates.clear();
+        entitiesToSend.clear();
 
         if (recipient.isSpectator) {
             for (const auto& [id, p] : players) {
@@ -182,7 +191,6 @@ void GameWorld::BroadcastWorldState(NetworkServer* server) {
             grid.GetRelevantEntities(recipient.x, recipient.z, nearbyEntities);
         }
 
-        uint32_t count = 0;
         for (uint32_t targetID : nearbyEntities) {
             if (players.find(targetID) == players.end()) continue;
             Player& target = players[targetID];
@@ -192,7 +200,37 @@ void GameWorld::BroadcastWorldState(NetworkServer* server) {
                 if (targetID % Purpose::SIS_GROUPS != sisGroupIndex) continue;
             }
 
-            count++;
+            if (targetID == recipID) {
+                EntityDist d;
+                d.id = targetID;
+                d.distSq = -1.0f;
+                candidates.push_back(d);
+                continue;
+            }
+
+            float dx = target.x - recipient.x;
+            float dz = target.z - recipient.z;
+            float dSq = dx*dx + dz*dz;
+
+            EntityDist d;
+            d.id = targetID;
+            d.distSq = dSq;
+            candidates.push_back(d);
+        }
+
+        if (candidates.size() > MAX_ENTITIES_PER_PACKET_SAFE) {
+            std::partial_sort(candidates.begin(),
+                              candidates.begin() + MAX_ENTITIES_PER_PACKET_SAFE,
+                              candidates.end(),
+                              [](const EntityDist& a, const EntityDist& b) {
+                                  return a.distSq < b.distSq;
+                              });
+
+            candidates.resize(MAX_ENTITIES_PER_PACKET_SAFE);
+        }
+
+        for (const auto& c : candidates) {
+            entitiesToSend.push_back(c.id);
         }
 
         uint8_t stackBuffer[Purpose::MTU_SIZE];
@@ -203,13 +241,10 @@ void GameWorld::BroadcastWorldState(NetworkServer* server) {
         writer.WriteBits(currentServerTick, 32);
         writer.WriteBits(recipient.lastAckedTick, 32);
 
-        writer.WriteBits(count, 10);
+        writer.WriteBits((uint32_t)entitiesToSend.size(), 10);
 
-        for (uint32_t targetID : nearbyEntities) {
-            if (players.find(targetID) == players.end()) continue;
+        for (uint32_t targetID : entitiesToSend) {
             Player& target = players[targetID];
-            if (target.isSpectator) continue;
-            if (recipient.isSpectator && targetID % Purpose::SIS_GROUPS != sisGroupIndex) continue;
 
             writer.WriteBits(target.id, 32);
 
@@ -234,12 +269,15 @@ void GameWorld::BroadcastWorldState(NetworkServer* server) {
 
                 float viewRangeSq = Purpose::SPAWN_RANGE * Purpose::SPAWN_RANGE;
 
-                bool wasVisible = oldDistSq < viewRangeSq;
+                float safeDeltaRangeSq = 25.0f * 25.0f;
 
-                if (wasVisible) {
-                    if (curQX == targetBase->qx && curQZ == targetBase->qz) {
+                if (oldDistSq < viewRangeSq) {
+                    bool isSafeFromCap = oldDistSq < safeDeltaRangeSq;
+
+                    if (isSafeFromCap && curQX == targetBase->qx && curQZ == targetBase->qz) {
                         posChanged = false;
                     }
+
                     if (std::abs(target.yaw - targetBase->yaw) < 0.1f) {
                         rotChanged = false;
                     }
@@ -251,19 +289,14 @@ void GameWorld::BroadcastWorldState(NetworkServer* server) {
                 writer.WriteInt(curQX, 32);
                 writer.WriteInt(curQZ, 32);
             }
-
             writer.WriteBit(rotChanged);
-            if (rotChanged) {
-                writer.WriteFloat(target.yaw);
-            }
+            if (rotChanged) writer.WriteFloat(target.yaw);
         }
 
         writer.WriteAlign();
-        if (!writer.IsValid()) {
-            std::cerr << "[Network] CRITICAL: Packet overflow! Dropping update." << std::endl;
-            return;
+        if (writer.IsValid()) {
+            server->SendToPeer(recipient.peer, writer.GetData(), writer.GetByteLength(), false);
         }
-        server->SendToPeer(recipient.peer, writer.GetData(), writer.GetByteLength(), false);
     }
 }
 

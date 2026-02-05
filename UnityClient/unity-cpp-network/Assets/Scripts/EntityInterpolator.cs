@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Serialization;
 
 public class EntityInterpolator : MonoBehaviour
 {
@@ -16,6 +15,9 @@ public class EntityInterpolator : MonoBehaviour
     public float GlobalDelay = 0.1f; 
 
     private bool _isLocalPlayer = false;
+    
+    private float _clientRenderTime = 0;
+    private bool _hasStarted = false;
 
     public void Initialize(bool isLocal)
     {
@@ -23,6 +25,12 @@ public class EntityInterpolator : MonoBehaviour
         enabled = !isLocal;
     }
     
+    public void ClearBuffer()
+    {
+        _snapshotBuffer.Clear();
+        _hasStarted = false;
+    }
+
     public void PushState(uint serverTick, Vector3? pos, Quaternion? rot)
     {
         float snapshotTime = serverTick * PurposeProtocol.TICK_DELTA;
@@ -50,29 +58,52 @@ public class EntityInterpolator : MonoBehaviour
         });
 
         if (_snapshotBuffer.Count > 20) _snapshotBuffer.RemoveAt(0);
+        
+        if (!_hasStarted && _snapshotBuffer.Count >= 2)
+        {
+            _hasStarted = true;
+            _clientRenderTime = snapshotTime - GlobalDelay;
+        }
     }
 
     void Update()
     {
-        if (_isLocalPlayer || _snapshotBuffer.Count < 2) return;
+        if (_isLocalPlayer || !_hasStarted || _snapshotBuffer.Count < 2) return;
+
+        _clientRenderTime += Time.deltaTime;
 
         float latestServerTime = _snapshotBuffer[_snapshotBuffer.Count - 1].TickTime;
-        float renderTime = latestServerTime - GlobalDelay;
+        float targetTime = latestServerTime - GlobalDelay;
+        float diff = targetTime - _clientRenderTime;
 
+        if (Mathf.Abs(diff) > 1.0f) _clientRenderTime = targetTime;
+        else _clientRenderTime += diff * 0.1f * Time.deltaTime;
+
+        bool foundWindow = false;
         for (int i = 0; i < _snapshotBuffer.Count - 1; i++)
         {
             StateSnapshot from = _snapshotBuffer[i];
             StateSnapshot to = _snapshotBuffer[i + 1];
 
-            if (renderTime >= from.TickTime && renderTime <= to.TickTime)
+            if (_clientRenderTime >= from.TickTime && _clientRenderTime <= to.TickTime)
             {
-                float total = to.TickTime - from.TickTime;
-                float t = (renderTime - from.TickTime) / total;
+                float duration = to.TickTime - from.TickTime;
+                if (duration < 0.001f) duration = 0.02f;
+
+                float t = (_clientRenderTime - from.TickTime) / duration;
 
                 transform.position = Vector3.Lerp(from.Position, to.Position, t);
                 transform.rotation = Quaternion.Slerp(from.Rotation, to.Rotation, t);
-                return;
+                foundWindow = true;
+                break;
             }
+        }
+        
+        if (!foundWindow && _snapshotBuffer.Count > 0)
+        {
+            var last = _snapshotBuffer[_snapshotBuffer.Count - 1];
+            transform.position = last.Position;
+            transform.rotation = last.Rotation;
         }
     }
 }

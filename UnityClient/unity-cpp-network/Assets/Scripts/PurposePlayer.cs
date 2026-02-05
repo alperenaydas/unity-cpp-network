@@ -22,4 +22,9 @@ public class PurposePlayer : MonoBehaviour
     {
         _interpolator.PushState(serverTick, pos, rot);
     }
+
+    public void ResetInterpolation()
+    {
+        _interpolator.ClearBuffer();
+    }
 }
