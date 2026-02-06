@@ -2,8 +2,10 @@
 #include <chrono>
 #include <thread>
 #include <iostream>
+#include <csignal>
 #include "NetworkServer.h"
 #include "GameWorld.h"
+
 #ifdef _WIN32
 #include <windows.h>
 #pragma comment(lib, "winmm.lib")
@@ -32,6 +34,7 @@ void OnPacket(ENetPeer* peer, const uint16_t type, void* data, size_t length) {
 
 int main() {
     signal(SIGINT, SignalHandler);
+    signal(SIGTERM, SignalHandler);
 
 #ifdef _WIN32
     timeBeginPeriod(1);
@@ -66,6 +69,7 @@ int main() {
         if (accumulator >= 0.25) {
             accumulator = 0.25;
         }
+
         server.PollEvents();
 
         bool physicsUpdated = false;

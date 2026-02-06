@@ -148,7 +148,6 @@ int main() {
             }
         }
 
-        // 4. AI LOGIC
         if (myID != 0) {
             BotState& me = worldView[myID];
             bool w = false, a = false, s = false, d = false, fire = false;
@@ -159,15 +158,26 @@ int main() {
 
             if (targetID != 0) {
                 BotState& target = worldView[targetID];
+
+                // 1. Calculate Distance
+                float dist = GetDistance(me.x, me.z, target.x, target.z);
+
+                // 2. Aim
                 targetYaw = CalculateYaw(target.x - me.x, target.z - me.z);
+
+                // 3. Move (Stop if too close to avoid collision)
                 NavigateTo(me.x, me.z, target.x, target.z, w, a, s, d);
 
-                // Shoot if lined up
-                if (currentTick % 10 == 0) fire = true; // 5 shots per second
+                // 4. Fire Control (FIXED: Only shoot if close enough!)
+                // Only fire if within 15 meters AND aim is steady
+                if (dist < 15.0f && currentTick % 10 == 0) {
+                    fire = true;
+                }
+
                 hasWanderTarget = false;
             }
             else {
-                // Patrol
+                // Patrol (No enemies visible)
                 if (!hasWanderTarget || GetDistance(me.x, me.z, wanderX, wanderZ) < 2.0f) {
                     wanderX = rangeDist(rng);
                     wanderZ = rangeDist(rng);

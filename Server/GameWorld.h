@@ -9,9 +9,9 @@
 class NetworkServer;
 
 struct WorldSnapshot {
-    uint32_t tick;
-    int32_t qx, qz;
-    float yaw;
+    uint32_t tick = 0;
+    int32_t qx = 0, qz = 0;
+    float yaw = 0.0f;
 };
 
 struct Ray {
@@ -20,11 +20,11 @@ struct Ray {
 };
 
 struct Player {
-    uint32_t id;
-    ENetPeer* peer;
+    uint32_t id = 0;
+    ENetPeer* peer = nullptr;
 
-    float x, y, z;
-    float yaw;
+    float x = 0.0f, z = 0.0f;
+    float yaw = 0.0f;
 
     uint32_t lastProcessedTick = 0;
     uint32_t lastAckedTick = 0;

@@ -33,16 +33,16 @@ public class LocalSmoother : MonoBehaviour
 
     private void OnDestroy()
     {
-        if (VisualRoot != null && LogicRoot != null)
+        if (VisualRoot != null)
         {
-            VisualRoot.SetParent(LogicRoot);
-            VisualRoot.localPosition = _localPosOffset;
-            VisualRoot.localRotation = _localRotOffset;
+            Destroy(VisualRoot.gameObject);
         }
     }
 
     private void FixedUpdate()
     {
+        if (LogicRoot == null) return; 
+
         _prevPos = _currPos;
         _prevRot = _currRot;
 
@@ -54,12 +54,13 @@ public class LocalSmoother : MonoBehaviour
     {
         if (LogicRoot == null) 
         {
-            Destroy(VisualRoot.gameObject);
+            if (VisualRoot != null) Destroy(VisualRoot.gameObject);
             return;
         }
 
-        float factor = (Time.time - Time.fixedTime) / Time.fixedDeltaTime;
+        if (VisualRoot == null) return;
 
+        float factor = (Time.time - Time.fixedTime) / Time.fixedDeltaTime;
         VisualRoot.position = Vector3.Lerp(_prevPos, _currPos, factor);
         VisualRoot.rotation = Quaternion.Slerp(_prevRot, _currRot, factor);
     }

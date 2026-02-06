@@ -25,7 +25,7 @@ void GameWorld::OnClientConnect(ENetPeer* peer, NetworkServer* server) {
 
     Purpose::WelcomePacket w;
     w.playerID = id;
-    w.spawnX = p.x; w.spawnY = p.y; w.spawnZ = p.z;
+    w.spawnX = p.x; w.spawnZ = p.z;
     server->SendToPeer(peer, &w, sizeof(w), true);
 }
 
@@ -333,40 +333,41 @@ void GameWorld::ProcessFire(uint32_t shooterID, float yaw, NetworkServer* server
     }
 
     if (hitID != 0) {
-        // players[hitID].isAlive = false;
-        // players[hitID].respawnTimer = 2.0f;
-        // players[hitID].x = -9999.0f;
-        //
-        // std::cout << "[Game] Player " << shooterID << " HIT " << hitID << std::endl;
-        //
-        // std::vector<uint32_t> witnesses;
-        // grid.GetRelevantEntities(rewoundX, rewoundZ, witnesses);
-        //
-        // Purpose::EntityDespawn d;
-        // d.networkID = hitID;
-        //
-        // for (uint32_t witnessID : witnesses) {
-        //     if (witnessID == hitID) continue;
-        //     if (players.count(witnessID) && !players[witnessID].isSpectator) {
-        //         server->SendToPeer(players[witnessID].peer, &d, sizeof(d), true);
-        //     }
-        // }
-        //
-        // BitWriter writer(64);
-        // writer.WriteBits(Purpose::PACKET_DEBUG_HIT & 0xFF, 8);
-        // writer.WriteBits((Purpose::PACKET_DEBUG_HIT >> 8) & 0xFF, 8);
-        // writer.WriteFloat(rewoundX);
-        // writer.WriteFloat(rewoundZ);
-        // writer.WriteAlign();
-        //
-        // for (auto& [id, player] : players) {
-        //     if (player.isSpectator) {
-        //         server->SendToPeer(player.peer, writer.GetData(), writer.GetByteLength(), true);
-        //         server->SendToPeer(player.peer, &d, sizeof(d), true);
-        //     }
-        // }
-        //
-        // grid.RemoveEntity(hitID);
+        players[hitID].isAlive = false;
+        players[hitID].respawnTimer = 2.0f;
+        players[hitID].x = -9999.0f;
+
+        std::cout << "[Game] Player " << shooterID << " HIT " << hitID << std::endl;
+
+        std::vector<uint32_t> witnesses;
+        grid.GetRelevantEntities(rewoundX, rewoundZ, witnesses);
+
+        Purpose::EntityDespawn d;
+        d.networkID = hitID;
+
+        for (uint32_t witnessID : witnesses) {
+            if (witnessID == hitID) continue;
+            if (players.count(witnessID) && !players[witnessID].isSpectator) {
+                server->SendToPeer(players[witnessID].peer, &d, sizeof(d), true);
+            }
+        }
+
+        uint8_t buffer[64];
+        BitWriter writer(buffer, 64);
+        writer.WriteBits(Purpose::PACKET_DEBUG_HIT & 0xFF, 8);
+        writer.WriteBits((Purpose::PACKET_DEBUG_HIT >> 8) & 0xFF, 8);
+        writer.WriteFloat(rewoundX);
+        writer.WriteFloat(rewoundZ);
+        writer.WriteAlign();
+
+        for (auto& [id, player] : players) {
+            if (player.isSpectator) {
+                server->SendToPeer(player.peer, writer.GetData(), writer.GetByteLength(), true);
+                server->SendToPeer(player.peer, &d, sizeof(d), true);
+            }
+        }
+
+        grid.RemoveEntity(hitID);
     }
 }
 
@@ -403,7 +404,6 @@ void GameWorld::SpawnPlayer(Player& p) {
     float rZ = (static_cast<float>(rand()) / static_cast<float>(RAND_MAX)) * (2.0f * range) - range;
 
     p.x = rX;
-    p.y = 0.0f;
     p.z = rZ;
 
     grid.UpdateEntity(p.id, p.x, p.z);

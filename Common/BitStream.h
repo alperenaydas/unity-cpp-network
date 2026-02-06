@@ -29,7 +29,7 @@ public:
         }
 
         if (value) {
-            buffer[byteIndex] |= (1 << (7 - (bitPtr % 8)));
+            buffer[byteIndex] |= (1u << (7 - (bitPtr % 8)));
         }
         bitPtr++;
     }
