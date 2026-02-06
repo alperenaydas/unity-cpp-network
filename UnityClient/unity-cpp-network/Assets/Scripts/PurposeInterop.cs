@@ -36,6 +36,8 @@ public static class PurposeInterop
 
     [DllImport(DLL_NAME, CallingConvention = CallingConvention.Cdecl)] 
     public static extern int GetLatestBitstream([In, Out] byte[] outBuffer, int maxLen);
+    [DllImport(DLL_NAME, CallingConvention = CallingConvention.Cdecl)] 
+    public static extern void SendSpectateTarget(uint targetID);
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]

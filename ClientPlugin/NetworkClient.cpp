@@ -218,6 +218,16 @@ void NetworkClient::SendBecomeSpectatorRequest() {
     enet_peer_send(serverPeer, Purpose::CHANNEL_RELIABLE, packet);
 }
 
+void NetworkClient::SendSpectateTarget(uint32_t targetID) {
+    if (!serverPeer) return;
+
+    Purpose::ClientSpectateTarget req;
+    req.targetID = targetID;
+
+    ENetPacket* packet = enet_packet_create(&req, sizeof(req), ENET_PACKET_FLAG_RELIABLE);
+    enet_peer_send(serverPeer, Purpose::CHANNEL_RELIABLE, packet);
+}
+
 int NetworkClient::CopyLatestBitstream(uint8_t* outBuffer, int maxLen) {
     GamePacket* pkt = nullptr;
 

@@ -25,6 +25,7 @@ public:
 
     void SendInput(uint32_t tick, bool w, bool a, bool s, bool d, bool fire, float yaw);
     void SendBecomeSpectatorRequest();
+    void SendSpectateTarget(uint32_t targetID);
 
     uint32_t PopDespawnID();
 

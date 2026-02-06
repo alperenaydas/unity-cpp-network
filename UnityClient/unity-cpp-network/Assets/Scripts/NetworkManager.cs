@@ -81,7 +81,7 @@ public class NetworkManager : MonoBehaviour
         var serverTick = reader.ReadBits(32);
         var baselineTick = reader.ReadBits(32);
         var entityCount = (int)reader.ReadBits(10);
-        
+
         for (int i = 0; i < entityCount; i++)
         {
             var id = reader.ReadBits(32);
@@ -123,17 +123,10 @@ public class NetworkManager : MonoBehaviour
             {
                 PurposeInput.Instance.RegisterLocalPlayer(player.transform);
                 var cam = Camera.main?.GetComponent<CameraFollower>();
-                if (cam) 
+                if (cam)
                 {
                     var smoother = player.GetComponent<LocalSmoother>();
-                    if (smoother != null && smoother.VisualRoot != null)
-                    {
-                        cam.Target = smoother.VisualRoot;
-                    }
-                    else
-                    {
-                        cam.Target = player.transform;
-                    }
+                    cam.Target = (smoother && smoother.VisualRoot) ? smoother.VisualRoot : player.transform;
                 }
             }
 
@@ -162,14 +155,14 @@ public class NetworkManager : MonoBehaviour
         else
         {
             player.ApplyNetworkUpdate(serverTick, newPos, newRot);
-            
+
             if (posChanged && newPos.HasValue)
             {
                 float dist = Vector3.Distance(player.transform.position, newPos.Value);
-                if (dist > 5.0f) 
+                if (dist > 5.0f)
                 {
                     player.transform.position = newPos.Value;
-                    player.ResetInterpolation(); 
+                    player.ResetInterpolation();
                 }
             }
         }
@@ -212,16 +205,9 @@ public class NetworkManager : MonoBehaviour
     void FixedUpdate()
     {
         if (!_connected || _myID == 0) return;
-
         _currentTick++;
-
-        if (_isSpectatorMode)
-        {
-            return;
-        }
-
+        if (_isSpectatorMode) return;
         var input = PurposeInput.Instance;
-
         PurposeInterop.SendMovementInput(_currentTick, input.W, input.A, input.S, input.D, input.Fire, input.MouseYaw);
 
         if (_remotePlayers.TryGetValue(_myID, out var myPlayer))

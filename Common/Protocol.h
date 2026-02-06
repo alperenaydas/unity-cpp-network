@@ -92,5 +92,6 @@ namespace Purpose {
         uint16_t type = PACKET_CLIENT_SPECTATOR;
         uint32_t tick;
     };
+
 #pragma pack(pop)
 }
