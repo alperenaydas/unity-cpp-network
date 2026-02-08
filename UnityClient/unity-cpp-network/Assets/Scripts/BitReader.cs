@@ -1,6 +1,6 @@
-using System;
+using System.Runtime.InteropServices;
 
-public class BitReader
+public struct BitReader
 {
     private readonly byte[] _buffer;
     private int _bitPtr;
@@ -38,10 +38,18 @@ public class BitReader
 
     public int ReadInt(int bits) => (int)ReadBits(bits);
 
+    [StructLayout(LayoutKind.Explicit)]
+    private struct UIntFloatUnion
+    {
+        [FieldOffset(0)] public uint UIntValue;
+        [FieldOffset(0)] public float FloatValue;
+    }
+
     public float ReadFloat()
     {
         uint bits = ReadBits(32);
-        byte[] bytes = BitConverter.GetBytes(bits);
-        return BitConverter.ToSingle(bytes, 0);
+        
+        UIntFloatUnion union = new UIntFloatUnion { UIntValue = bits };
+        return union.FloatValue;
     }
 }

@@ -14,8 +14,8 @@ public class PurposePlayer : MonoBehaviour
     {
         _purposeController.IsLocalPlayer = isLocal;
         _interpolator.Initialize(isLocal);
-        _playerMesh.material = isLocal ? _playerMaterial : _enemyMaterial;
-        name = isLocal ? "MyPlayer" : $"RemotePlayer_{id}";
+        _playerMesh.sharedMaterial = isLocal ? _playerMaterial : _enemyMaterial;
+        // name = isLocal ? "MyPlayer" : $"RemotePlayer_{id}";
     }
     
     public void ApplyNetworkUpdate(uint serverTick, Vector3? pos, Quaternion? rot)

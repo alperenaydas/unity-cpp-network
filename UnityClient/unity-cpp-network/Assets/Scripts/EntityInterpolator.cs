@@ -10,7 +10,7 @@ public class EntityInterpolator : MonoBehaviour
         public float TickTime;
     }
 
-    private List<StateSnapshot> _snapshotBuffer = new List<StateSnapshot>();
+    private List<StateSnapshot> _snapshotBuffer = new List<StateSnapshot>(32);
     
     public float GlobalDelay = 0.1f; 
 

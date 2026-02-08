@@ -1,5 +1,6 @@
 using UnityEngine;
 using TMPro;
+using System.Text; // Required for StringBuilder
 
 public class PurposeNetworkUI : MonoBehaviour
 {
@@ -8,6 +9,7 @@ public class PurposeNetworkUI : MonoBehaviour
 
     private float _updateInterval = 0.5f;
     private float _timer;
+    private StringBuilder _sb = new StringBuilder(500);
 
     void Update()
     {
@@ -22,15 +24,12 @@ public class PurposeNetworkUI : MonoBehaviour
 
     private void UpdateDisplay(NetworkMetrics m)
     {
-        // Format bytes to KB/MB for readability
-        string inKB = (m.IncomingBandwidth / 1024f).ToString("F2");
-        string outKB = (m.OutgoingBandwidth / 1024f).ToString("F2");
-
-        _displayText.text = 
-            $"<color=green>RTT:</color> {m.Ping}ms\n" +
-            $"<color=red>LOSS:</color> {m.PacketLoss}%\n" +
-            $"<color=yellow>PLAYERS:</color> {_networkManager.PlayerCount}\n" +
-            $"<color=cyan>DL:</color> {m.IncomingBandwidth:F2} KB/s\n" +
-            $"<color=cyan>UL:</color> {m.OutgoingBandwidth:F2} KB/s";
+        _sb.Clear();
+        _sb.Append("<color=green>RTT:</color> ").Append(m.Ping).Append("ms\n");
+        _sb.Append("<color=red>LOSS:</color> ").Append(m.PacketLoss).Append("%\n");
+        _sb.Append("<color=yellow>PLAYERS:</color> ").Append(_networkManager.PlayerCount).Append("\n");
+        _sb.Append("<color=cyan>DL:</color> ").Append(m.IncomingBandwidth.ToString("F2")).Append(" KB/s\n");
+        _sb.Append("<color=cyan>UL:</color> ").Append(m.OutgoingBandwidth.ToString("F2")).Append(" KB/s");
+        _displayText.SetText(_sb);
     }
 }
