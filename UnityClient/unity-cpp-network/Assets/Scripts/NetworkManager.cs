@@ -8,6 +8,7 @@ public class NetworkManager : MonoBehaviour
 
     private Dictionary<uint, PurposePlayer> _remotePlayers = new();
     private PredictionSystem _predictor;
+    public Transform _ghostTransform;
     private PurposeInterop.LogDelegate _logHandler;
 
     private uint _myID = 0;
@@ -212,7 +213,7 @@ public class NetworkManager : MonoBehaviour
 
         if (_remotePlayers.TryGetValue(_myID, out var myPlayer))
         {
-            if (_predictor == null) _predictor = new PredictionSystem(myPlayer.transform);
+            if (_predictor == null) _predictor = new PredictionSystem(myPlayer.transform, _ghostTransform);
 
             var predictedPos = PredictionSystem.SimulateMovement(
                 myPlayer.transform.position,
