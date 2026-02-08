@@ -62,10 +62,4 @@ extern "C" {
             g_Client->SendBecomeSpectatorRequest();
         }
     }
-
-    EXPORT_API void SendSpectateTarget(uint32_t targetID) {
-        if (g_Client) {
-            g_Client->SendSpectateTarget(targetID);
-        }
-    }
 }
